@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
-    <title>RPC与RUST比较</title>
-    <url>/2021/07/06/RPC%E4%B8%8ERUST%E6%AF%94%E8%BE%83/</url>
+    <title>RPC系列（一）- RPC与RUST比较</title>
+    <url>/2021/07/06/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-%20RPC%E4%B8%8ERUST%E6%AF%94%E8%BE%83/</url>
     <content><![CDATA[<blockquote>
 <p>本篇文章主要介绍RPC是什么，RPC的具体过程，RPC和RUST的比较以及如何选择。</p>
 </blockquote>
@@ -22,6 +22,71 @@
         <tag>RPC</tag>
         <tag>RUST</tag>
         <tag>Rustful</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>RPC系列（二）- gRPC入门</title>
+    <url>/2021/07/08/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%BA%8C%EF%BC%89-%20gRPC%E5%85%A5%E9%97%A8/</url>
+    <content><![CDATA[<blockquote>
+<p>简单介绍gRPC和ProtoBuf，以及gRPC和ProtoBuf的安装和简单使用，并用golang实现简单RPC服务。</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="gRPC简介"><a href="#gRPC简介" class="headerlink" title="gRPC简介"></a>gRPC简介</h2><p><a href="https://grpc.io/">gRPC</a> 是由Google开发的远程过程调用开源框架，支持多种开发语言，且支持跨语言通信。是基于HTTP2通信协议标准设计开发,默认采用Protocol Buffers数据序列化协议。</p>
+<h3 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">go get google.golang.org&#x2F;grpc</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">go install google.golang.org&#x2F;protobuf&#x2F;cmd&#x2F;protoc-gen-go</span><br><span class="line">go install google.golang.org&#x2F;grpc&#x2F;cmd&#x2F;protoc-gen-go-grpc</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="ProtoBuf简介"><a href="#ProtoBuf简介" class="headerlink" title="ProtoBuf简介"></a>ProtoBuf简介</h2><p>gRPC跨语言的支持都是通过<code>Protocol Buffers</code>这个东西，它是一个代码生成工具以及序列化工具。它可以把我们定义好的方法和数据结构转化成指定语言的代码。同时能将我们请求和响应的数据编码成gRPC能传输的形式，又能将数据序列化和反序列化成该语言能处理的形式。</p>
+<h3 id="安装-1"><a href="#安装-1" class="headerlink" title="安装"></a>安装</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">brew info protobuf</span><br></pre></td></tr></table></figure>
+
+<h3 id="使用命令"><a href="#使用命令" class="headerlink" title="使用命令"></a>使用命令</h3><p>这里不整理Protobuf文件的语法，<a href="http://www.topgoer.com/%E5%BE%AE%E6%9C%8D%E5%8A%A1/gRPC/Protobuf%E8%AF%AD%E6%B3%95.html">Protobuf语法</a>看这里。</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">protoc -I&#x3D;$SRC_DIR --go_out&#x3D;$DST_DIR $SRC_DIR&#x2F;fileName.proto</span><br><span class="line"></span><br><span class="line">protoc -I&#x3D;$SRC_DIR --go-grpc_out&#x3D;$DST_DIR $SRC_DIR&#x2F;fileName.proto</span><br></pre></td></tr></table></figure>
+
+<p>$SRC_DIR : 待编译的proto文件所在目录</p>
+<p>$DST_DIR：生成后的代码所存放的目录</p>
+<h2 id="简单示例"><a href="#简单示例" class="headerlink" title="简单示例"></a>简单示例</h2><h3 id="First-proto文件编写和生成源码"><a href="#First-proto文件编写和生成源码" class="headerlink" title="First: proto文件编写和生成源码"></a>First: proto文件编写和生成源码</h3><p>proto文件书写，先定义该通信用到的数据类型和结构，请求和响应的数据模型。</p>
+<figure class="highlight protobuf"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">message</span> <span class="title">Massage</span> </span>&#123;</span><br><span class="line">  <span class="built_in">string</span> request = <span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>再定义该通信的方法，只需要定义方法名、请求参数、响应参数即可。</p>
+<figure class="highlight protobuf"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">service</span> <span class="title">HelloService</span></span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">rpc</span> Hello(Massage) <span class="keyword">returns</span> (Massage)</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>通过protoc命名生成指定语言的代码，这里是生成go语言的代码。</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">protoc --go_out=. massage.proto</span><br><span class="line">protoc --go-grpc_out=. massage.proto</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="Second-Server代码编写"><a href="#Second-Server代码编写" class="headerlink" title="Second: Server代码编写"></a>Second: Server代码编写</h3><p>HelloService方法的具体实现，这里简单实现。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(h *helloService)</span> <span class="title">Hello</span><span class="params">(c context.Context, requestMessage *protobuf.Massage)</span> <span class="params">(responseMessage *protobuf.Massage, err error)</span></span> &#123;</span><br><span class="line">	msg := <span class="string">&quot;hello &quot;</span> + requestMessage.Request</span><br><span class="line">	responseMessage = &amp;protobuf.Massage&#123;Request: msg&#125;</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>创建rpc服务，注册通信方法的具体实现。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">server := grpc.NewServer()</span><br><span class="line">protobuf.RegisterHelloServiceServer(server, &amp;service.HelloService)</span><br></pre></td></tr></table></figure>
+
+<p>监听端口，至此简单的rpc服务就写完了。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">listen, err := net.Listen(<span class="string">&quot;tcp&quot;</span>, <span class="string">&quot;localhost:9000&quot;</span>)</span><br><span class="line">err = server.Serve(listen)</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="Third：Client代码编写"><a href="#Third：Client代码编写" class="headerlink" title="Third：Client代码编写"></a>Third：Client代码编写</h3><p>创建rpc客户端，建立连接。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">conn, err := grpc.Dial(<span class="string">&quot;localhost:9000&quot;</span>, grpc.WithInsecure())</span><br><span class="line">c := protobuf.NewHelloServiceClient(conn)</span><br></pre></td></tr></table></figure>
+
+<p>发送请求信息以及读取响应信息。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">requestMessage := &amp;protobuf.Massage&#123;Request: <span class="string">&quot;world &quot;</span>&#125;</span><br><span class="line">responseMessage, err := c.Hello(context.Background(), requestMessage)</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
+
+]]></content>
+      <categories>
+        <category>gRPC</category>
+        <category>ProtoBuf</category>
+      </categories>
+      <tags>
+        <tag>RPC</tag>
+        <tag>gRPC</tag>
+        <tag>ProtoBuf</tag>
+        <tag>Golang</tag>
       </tags>
   </entry>
 </search>
