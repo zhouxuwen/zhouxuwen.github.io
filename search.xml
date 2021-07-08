@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
-    <title>RPC系列（一）- RPC与RUST比较</title>
+    <title>RPC系列（一）-RPC与RUST比较</title>
     <url>/2021/07/06/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-%20RPC%E4%B8%8ERUST%E6%AF%94%E8%BE%83/</url>
     <content><![CDATA[<blockquote>
 <p>本篇文章主要介绍RPC是什么，RPC的具体过程，RPC和RUST的比较以及如何选择。</p>
@@ -25,7 +25,7 @@
       </tags>
   </entry>
   <entry>
-    <title>RPC系列（二）- gRPC入门</title>
+    <title>RPC系列（二）-gRPC入门</title>
     <url>/2021/07/08/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%BA%8C%EF%BC%89-%20gRPC%E5%85%A5%E9%97%A8/</url>
     <content><![CDATA[<blockquote>
 <p>简单介绍gRPC和ProtoBuf，以及gRPC和ProtoBuf的安装和简单使用，并用golang实现简单RPC服务。</p>
@@ -79,8 +79,7 @@
 
 ]]></content>
       <categories>
-        <category>gRPC</category>
-        <category>ProtoBuf</category>
+        <category>RPC</category>
       </categories>
       <tags>
         <tag>RPC</tag>
