@@ -1,6 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title>Golang系列（一）-context使用</title>
+    <url>/2021/07/12/Golang%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-context/</url>
+    <content><![CDATA[<blockquote>
+<p>go的context包详解，context中文翻译过来叫“上下文”，本篇文章讲一下它具体的作用是什么。你在什么情况下可以用到它。</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="引言"><a href="#引言" class="headerlink" title="引言"></a>引言</h2><p>http server 常为每个请求创建一个 goroutine 以并发地处理请求，同时这个 goroutine 又会创建更多的 gotoutine 来访问数据库和缓存或RPC服务，当请求结束或被终止，能释放所有 gotoutine的资源。因此就需要一种机制，在goroutine之间传递信号消息。</p>
+<h2 id="简介"><a href="#简介" class="headerlink" title="简介"></a>简介</h2><p>context 中文翻译过来叫”上下文“，常被用来 goroutine 之间传递信息和信号的。信息和信号包括截至时间（deadline)，取消信号(cancellation signals) 以及跨边界需要往下传递的键值对信息。</p>
+<h2 id="特性"><a href="#特性" class="headerlink" title="特性"></a>特性</h2><ul>
+<li>context的设计是可通过已有Context进行树型派生，已管理一组过程的生命周期。单Context是不可变的，但可以通过WithValue、WithCancel、WithTimeout方法进行派生并附加一些属性（键值、可取消、时限），以构建一组树型组织的context。</li>
+<li>当根 Context 结束时，所有由其派生出的 Context 也会被一并取消。也就是说，父 Context 的生命周期涵盖所有子 Context 的生命周期。</li>
+</ul>
+<h2 id="使用"><a href="#使用" class="headerlink" title="使用"></a>使用</h2><h3 id="创建根Context"><a href="#创建根Context" class="headerlink" title="创建根Context"></a>创建根Context</h3><p><code>context.Background() </code>创建一个空的Context（not nil), 常用作初始化创建根Context。</p>
+<h3 id="派生携带键值信息Context"><a href="#派生携带键值信息Context" class="headerlink" title="派生携带键值信息Context"></a>派生携带键值信息Context</h3><p><code>context.WithValue(parentContext, key, value)</code> 在父节点Context的基础上创建一个新的携带键值信息的的子节点Context。</p>
+<h3 id="派生可取消Context"><a href="#派生可取消Context" class="headerlink" title="派生可取消Context"></a>派生可取消Context</h3><p><code>context.WithCancel(parentContext) </code>在父节点Context的基础上创建一个新的可取消的子节点Context，返回新创建的子节点Context和取消方法cancelFunc。</p>
+<h3 id="派生有时间限制Context"><a href="#派生有时间限制Context" class="headerlink" title="派生有时间限制Context"></a>派生有时间限制Context</h3><p><code>context.WithTimeout(parentContext，timeout)</code>在父节点Context的基础上创建新的有时间限制的子节点Context，返回新创建子节点Context和取消方法cancelFunc。超过时间限制后，该Conext会发送信号到Done通道，所有子节点检测到信号立即退出。</p>
+<h3 id="派生有截至时间Context"><a href="#派生有截至时间Context" class="headerlink" title="派生有截至时间Context"></a>派生有截至时间Context</h3><p><code>context.WithDeadline(parentContext, time)</code>在父节点Context的基础上创建新的有截至时间的子节点Context,返回新创建子节点Context和取消方法cancelFunc。<code>context.Timeout(parentContext，timeout)</code>等价于<code>context.Deadline(parentContext,time.Now().Add(timeout))</code>。</p>
+<p>​    </p>
+<h2 id="注意"><a href="#注意" class="headerlink" title="注意"></a>注意</h2><ul>
+<li>Background 创建的根节点没有时限，也不能取消。</li>
+<li>WithCancel、WithTimeout、WithDeadline方法是从父context派生出新的context，新的context受限与父context的生命周期。新context应注意在对应过程结束后及时cancel，以防止goroutine泄露。</li>
+<li>不能使用nil Context，尽管语法上允许。不知道使用什么值合适时，可以使用 <code>context.TODO()</code>。</li>
+</ul>
+]]></content>
+      <categories>
+        <category>Golang</category>
+      </categories>
+      <tags>
+        <tag>Golang</tag>
+        <tag>context</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>RPC序列（三）-gRPC安全认证</title>
     <url>/2021/07/15/RPC%E5%BA%8F%E5%88%97%EF%BC%88%E4%B8%89%EF%BC%89-gRPC%E5%AE%89%E5%85%A8%E8%AE%A4%E8%AF%81/</url>
     <content><![CDATA[<blockquote>
@@ -67,6 +101,30 @@
         <tag>gRPC</tag>
         <tag>RPC</tag>
         <tag>SSL/TLS</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>RPC系列（一）-RPC与RUST比较</title>
+    <url>/2021/07/06/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-RPC%E4%B8%8ERUST%E6%AF%94%E8%BE%83/</url>
+    <content><![CDATA[<blockquote>
+<p>本篇文章主要介绍RPC是什么，RPC的具体过程，RPC和RUST的比较以及如何选择。</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="RPC是什么"><a href="#RPC是什么" class="headerlink" title="RPC是什么"></a>RPC是什么</h2><p>RPC(Remote Procedure Call)是远程过程调用的简称。主要目的就是一个应用调用另一个应用的方法，调用方通过调用代理方法的形式调用被调用方的实现方法。调用协议常包括通信协议和序列化协议。底层的通信协议可以是HTTP、TCP等，根据不同的RPC框架而定。序列化协议常用ProtoBuf协议。</p>
+<h2 id="RPC具体过程"><a href="#RPC具体过程" class="headerlink" title="RPC具体过程"></a>RPC具体过程</h2><p><img src="/images/rpc%E5%85%B7%E4%BD%93%E6%B5%81%E7%A8%8B.png" alt="rpc具体流程"></p>
+<h2 id="RPC和RUST比较"><a href="#RPC和RUST比较" class="headerlink" title="RPC和RUST比较"></a>RPC和RUST比较</h2><p>RUST是基于HTTP协议的RESTFul API设计风格的通信方式，也常用于应用之间的信息通信。但设计理念和底层原理是完全不同的。</p>
+<p>HTTP+Rustful的优点是可读性好，支持跨语言。在运用之间通信的使用超越RPC。但缺点也很明显，HTTP是第七层协议，报文包含大量头部信息，有用信息占比少，因此效率和速度较低。另外使用HTTP协议调用接口封装封装，常需要封装很多参数以及校验方法。RPC则更好与其互补，但牺牲可读性来通过效率和性能是可取的。具体怎么选，需根据业务来，灵活站位。</p>
+<h2 id="RPC使用场景"><a href="#RPC使用场景" class="headerlink" title="RPC使用场景"></a>RPC使用场景</h2><p>Rustful常用于与第三方系统之间的信息通信，通过对外调用的接口。</p>
+<p>RPC常用于自家系统之间的互相调用，更安全高效。</p>
+]]></content>
+      <categories>
+        <category>RPC</category>
+      </categories>
+      <tags>
+        <tag>RPC</tag>
+        <tag>RUST</tag>
+        <tag>Rustful</tag>
       </tags>
   </entry>
   <entry>
@@ -191,68 +249,10 @@
         <category>gRPC</category>
       </categories>
       <tags>
+        <tag>Golang</tag>
         <tag>gRPC</tag>
         <tag>RPC</tag>
         <tag>ProtoBuf</tag>
-        <tag>Golang</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Golang系列（一）-context使用</title>
-    <url>/2021/07/12/Golang%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-context/</url>
-    <content><![CDATA[<blockquote>
-<p>go的context包详解，context中文翻译过来叫“上下文”，本篇文章讲一下它具体的作用是什么。你在什么情况下可以用到它。</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="引言"><a href="#引言" class="headerlink" title="引言"></a>引言</h2><p>http server 常为每个请求创建一个 goroutine 以并发地处理请求，同时这个 goroutine 又会创建更多的 gotoutine 来访问数据库和缓存或RPC服务，当请求结束或被终止，能释放所有 gotoutine的资源。因此就需要一种机制，在goroutine之间传递信号消息。</p>
-<h2 id="简介"><a href="#简介" class="headerlink" title="简介"></a>简介</h2><p>context 中文翻译过来叫”上下文“，常被用来 goroutine 之间传递信息和信号的。信息和信号包括截至时间（deadline)，取消信号(cancellation signals) 以及跨边界需要往下传递的键值对信息。</p>
-<h2 id="特性"><a href="#特性" class="headerlink" title="特性"></a>特性</h2><ul>
-<li>context的设计是可通过已有Context进行树型派生，已管理一组过程的生命周期。单Context是不可变的，但可以通过WithValue、WithCancel、WithTimeout方法进行派生并附加一些属性（键值、可取消、时限），以构建一组树型组织的context。</li>
-<li>当根 Context 结束时，所有由其派生出的 Context 也会被一并取消。也就是说，父 Context 的生命周期涵盖所有子 Context 的生命周期。</li>
-</ul>
-<h2 id="使用"><a href="#使用" class="headerlink" title="使用"></a>使用</h2><h3 id="创建根Context"><a href="#创建根Context" class="headerlink" title="创建根Context"></a>创建根Context</h3><p><code>context.Background() </code>创建一个空的Context（not nil), 常用作初始化创建根Context。</p>
-<h3 id="派生携带键值信息Context"><a href="#派生携带键值信息Context" class="headerlink" title="派生携带键值信息Context"></a>派生携带键值信息Context</h3><p><code>context.WithValue(parentContext, key, value)</code> 在父节点Context的基础上创建一个新的携带键值信息的的子节点Context。</p>
-<h3 id="派生可取消Context"><a href="#派生可取消Context" class="headerlink" title="派生可取消Context"></a>派生可取消Context</h3><p><code>context.WithCancel(parentContext) </code>在父节点Context的基础上创建一个新的可取消的子节点Context，返回新创建的子节点Context和取消方法cancelFunc。</p>
-<h3 id="派生有时间限制Context"><a href="#派生有时间限制Context" class="headerlink" title="派生有时间限制Context"></a>派生有时间限制Context</h3><p><code>context.WithTimeout(parentContext，timeout)</code>在父节点Context的基础上创建新的有时间限制的子节点Context，返回新创建子节点Context和取消方法cancelFunc。超过时间限制后，该Conext会发送信号到Done通道，所有子节点检测到信号立即退出。</p>
-<h3 id="派生有截至时间Context"><a href="#派生有截至时间Context" class="headerlink" title="派生有截至时间Context"></a>派生有截至时间Context</h3><p><code>context.WithDeadline(parentContext, time)</code>在父节点Context的基础上创建新的有截至时间的子节点Context,返回新创建子节点Context和取消方法cancelFunc。<code>context.Timeout(parentContext，timeout)</code>等价于<code>context.Deadline(parentContext,time.Now().Add(timeout))</code>。</p>
-<p>​    </p>
-<h2 id="注意"><a href="#注意" class="headerlink" title="注意"></a>注意</h2><ul>
-<li>Background 创建的根节点没有时限，也不能取消。</li>
-<li>WithCancel、WithTimeout、WithDeadline方法是从父context派生出新的context，新的context受限与父context的生命周期。新context应注意在对应过程结束后及时cancel，以防止goroutine泄露。</li>
-<li>不能使用nil Context，尽管语法上允许。不知道使用什么值合适时，可以使用 <code>context.TODO()</code>。</li>
-</ul>
-]]></content>
-      <categories>
-        <category>Golang</category>
-      </categories>
-      <tags>
-        <tag>Golang</tag>
-        <tag>context</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>RPC系列（一）-RPC与RUST比较</title>
-    <url>/2021/07/06/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-RPC%E4%B8%8ERUST%E6%AF%94%E8%BE%83/</url>
-    <content><![CDATA[<blockquote>
-<p>本篇文章主要介绍RPC是什么，RPC的具体过程，RPC和RUST的比较以及如何选择。</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="RPC是什么"><a href="#RPC是什么" class="headerlink" title="RPC是什么"></a>RPC是什么</h2><p>RPC(Remote Procedure Call)是远程过程调用的简称。主要目的就是一个应用调用另一个应用的方法，调用方通过调用代理方法的形式调用被调用方的实现方法。调用协议常包括通信协议和序列化协议。底层的通信协议可以是HTTP、TCP等，根据不同的RPC框架而定。序列化协议常用ProtoBuf协议。</p>
-<h2 id="RPC具体过程"><a href="#RPC具体过程" class="headerlink" title="RPC具体过程"></a>RPC具体过程</h2><p><img src="/images/rpc%E5%85%B7%E4%BD%93%E6%B5%81%E7%A8%8B.png" alt="rpc具体流程"></p>
-<h2 id="RPC和RUST比较"><a href="#RPC和RUST比较" class="headerlink" title="RPC和RUST比较"></a>RPC和RUST比较</h2><p>RUST是基于HTTP协议的RESTFul API设计风格的通信方式，也常用于应用之间的信息通信。但设计理念和底层原理是完全不同的。</p>
-<p>HTTP+Rustful的优点是可读性好，支持跨语言。在运用之间通信的使用超越RPC。但缺点也很明显，HTTP是第七层协议，报文包含大量头部信息，有用信息占比少，因此效率和速度较低。另外使用HTTP协议调用接口封装封装，常需要封装很多参数以及校验方法。RPC则更好与其互补，但牺牲可读性来通过效率和性能是可取的。具体怎么选，需根据业务来，灵活站位。</p>
-<h2 id="RPC使用场景"><a href="#RPC使用场景" class="headerlink" title="RPC使用场景"></a>RPC使用场景</h2><p>Rustful常用于与第三方系统之间的信息通信，通过对外调用的接口。</p>
-<p>RPC常用于自家系统之间的互相调用，更安全高效。</p>
-]]></content>
-      <categories>
-        <category>RPC</category>
-      </categories>
-      <tags>
-        <tag>RPC</tag>
-        <tag>RUST</tag>
-        <tag>Rustful</tag>
       </tags>
   </entry>
 </search>
