@@ -35,75 +35,6 @@
       </tags>
   </entry>
   <entry>
-    <title>RPC序列（三）-gRPC安全认证</title>
-    <url>/2021/07/15/RPC%E5%BA%8F%E5%88%97%EF%BC%88%E4%B8%89%EF%BC%89-gRPC%E5%AE%89%E5%85%A8%E8%AE%A4%E8%AF%81/</url>
-    <content><![CDATA[<blockquote>
-<p>未认证的RPC服务可能导致服务被攻击、注入恶意数据、数据泄露等安全问题。gRPC框架自带的两种安全认证方式，这里简单介绍这两种认证方式，并用Golang进行简单实现。</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="认证"><a href="#认证" class="headerlink" title="认证"></a>认证</h2><p>gRPC内置两种认证方式：</p>
-<ul>
-<li>SSL/TLS认证方式</li>
-<li>自定义认证方式</li>
-</ul>
-<h3 id="SSL-TLS认证"><a href="#SSL-TLS认证" class="headerlink" title="SSL/TLS认证"></a>SSL/TLS认证</h3><p>什么是SSL/TLS呢？SSL是安全套接字层(secure sockets layer),TLS是传输层安全 (transport layer security)，就是在应用层和TCP层之间新加一层加密，这样可以保证信息传输的安全性。</p>
-<h4 id="制作TLS证书"><a href="#制作TLS证书" class="headerlink" title="制作TLS证书"></a>制作TLS证书</h4><p>通过OpenSSL工具生成私钥，加密方式RSA，密码大小2048位。</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">$ openssl genrsa -out server.key 2048</span><br></pre></td></tr></table></figure>
-
-<p>使用私钥生成自签名的证书文件</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">openssl req -new -x509 -sha256 -key server.key -out server.pem -days 3650</span><br></pre></td></tr></table></figure>
-
-<p>填入证书自定义信息，注意<code>server name </code>填写的内容，后面会用到。</p>
-<h4 id="示例项目"><a href="#示例项目" class="headerlink" title="示例项目"></a>示例项目</h4><h5 id="First-server添加TLS认证"><a href="#First-server添加TLS认证" class="headerlink" title="First: server添加TLS认证"></a>First: server添加TLS认证</h5><p>通过密钥和刚刚制作的证书生成服务端传输证书。部分代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// TLS认证</span></span><br><span class="line">creds, err := credentials.NewServerTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;./keys/server.key&quot;</span> <span class="comment">/*制作证书存放路径*/</span>)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line">server := grpc.NewServer(grpc.Creds(creds))</span><br></pre></td></tr></table></figure>
-
-<h5 id="Second-client添加TLS认证"><a href="#Second-client添加TLS认证" class="headerlink" title="Second: client添加TLS认证"></a>Second: client添加TLS认证</h5><p>通过制作的证书生成客户端传输证书。部分代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// TLS认证</span></span><br><span class="line">creds, err := credentials.NewClientTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;server name&quot;</span> <span class="comment">/*制作证书时的server name*/</span>)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line">conn, err := grpc.Dial(<span class="string">&quot;localhost:9000&quot;</span>, grpc.WithTransportCredentials(creds))</span><br></pre></td></tr></table></figure>
-
-<p>到这里gRPC的TLS单向认证的简单实现就完成了。</p>
-<h3 id="自定义Token认证"><a href="#自定义Token认证" class="headerlink" title="自定义Token认证"></a>自定义Token认证</h3><p>通过自定义的身份认证方式进行认证客户端是否有权限。简单理解就是处理请求前对请求的内容进行身份认证。</p>
-<h4 id="示例项目-1"><a href="#示例项目-1" class="headerlink" title="示例项目"></a>示例项目</h4><h5 id="First-server添加鉴权拦截器"><a href="#First-server添加鉴权拦截器" class="headerlink" title="First: server添加鉴权拦截器"></a>First: server添加鉴权拦截器</h5><p>新增鉴权拦截器，示例代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Interceptor</span><span class="params">(ctx context.Context, req <span class="keyword">interface</span>&#123;&#125;, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">	err := Auth(ctx)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 继续处理请求</span></span><br><span class="line">	<span class="keyword">return</span> handler(ctx, req)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Auth</span><span class="params">(ctx context.Context)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	md, ok := metadata.FromIncomingContext(ctx)</span><br><span class="line">	<span class="keyword">if</span> !ok &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;无Token认证信息&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// authentication</span></span><br><span class="line">	val := md.Get(<span class="string">&quot;app_id&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(val) &lt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;app_id is empty&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	appID := val[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">	val = md.Get(<span class="string">&quot;secret_key&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(val) &lt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;secret_key is empty&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	appKey := val[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 简单模拟鉴权方式</span></span><br><span class="line">	<span class="keyword">if</span> _, ok := tokenMap[appID]; !ok || appKey != tokenMap[appID] &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;unauthorized&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>将鉴权拦截器加入服务选项，代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// token auth</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.UnaryInterceptor(interceptor.Interceptor))</span><br><span class="line"></span><br><span class="line"><span class="comment">// rpc server</span></span><br><span class="line">server := grpc.NewServer(opts...)</span><br></pre></td></tr></table></figure>
-
-
-
-<h5 id="second-client添加身份认证请求参数"><a href="#second-client添加身份认证请求参数" class="headerlink" title="second: client添加身份认证请求参数"></a>second: client添加身份认证请求参数</h5><h6 id="方式一：实现PerRPCCredentials接口"><a href="#方式一：实现PerRPCCredentials接口" class="headerlink" title="方式一：实现PerRPCCredentials接口"></a>方式一：实现PerRPCCredentials接口</h6><p>该接口有两个方法</p>
-<ol>
-<li><code>GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) </code> 返回请求的身份认证数据。</li>
-<li><code>RequireTransportSecurity() bool </code>返回是否开启TLS认证</li>
-</ol>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">type</span> authCredential <span class="keyword">struct</span>&#123;&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(*authCredential)</span> <span class="title">GetRequestMetadata</span><span class="params">(ctx context.Context, uri ...<span class="keyword">string</span>)</span> <span class="params">(<span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>, error)</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>&#123;<span class="string">&quot;app_id&quot;</span>:<span class="string">&quot;123456&quot;</span>,<span class="string">&quot;secret_key&quot;</span>:<span class="string">&quot;key&quot;</span>&#125;, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(*authCredential)</span> 	<span class="title">RequireTransportSecurity</span><span class="params">()</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>然后将该自定义认证加入到客户端选项中：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 自定义认证方式</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.WithPerRPCCredentials(<span class="built_in">new</span>(authCredential)))</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-
-
-
-<h6 id="方式二：context添加元数据"><a href="#方式二：context添加元数据" class="headerlink" title="方式二：context添加元数据"></a>方式二：context添加元数据</h6><p>请求方法的context添加身份认证元数据。</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 认证参数</span></span><br><span class="line">md := metadata.Pairs(<span class="string">&quot;app_id&quot;</span>, <span class="string">&quot;123456&quot;</span>, <span class="string">&quot;secret_key&quot;</span>, <span class="string">&quot;secret_key&quot;</span>)</span><br><span class="line">ctx := metadata.NewOutgoingContext(context.Background(), md)</span><br><span class="line"></span><br><span class="line"><span class="comment">// todo </span></span><br><span class="line"><span class="comment">// resp := client.Function(ctx, reqMsg...)</span></span><br></pre></td></tr></table></figure>
-
-<p>到这自定义身份认证的简单实现就完成了。</p>
-<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
-
-
-
-
-
-]]></content>
-      <categories>
-        <category>gRPC</category>
-      </categories>
-      <tags>
-        <tag>gRPC</tag>
-        <tag>RPC</tag>
-        <tag>SSL/TLS</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>RPC系列（一）-RPC与RUST比较</title>
     <url>/2021/07/06/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-RPC%E4%B8%8ERUST%E6%AF%94%E8%BE%83/</url>
     <content><![CDATA[<blockquote>
@@ -188,9 +119,78 @@
       </categories>
       <tags>
         <tag>Golang</tag>
-        <tag>gRPC</tag>
         <tag>RPC</tag>
+        <tag>gRPC</tag>
         <tag>ProtoBuf</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>RPC序列（三）-gRPC安全认证</title>
+    <url>/2021/07/15/RPC%E5%BA%8F%E5%88%97%EF%BC%88%E4%B8%89%EF%BC%89-gRPC%E5%AE%89%E5%85%A8%E8%AE%A4%E8%AF%81/</url>
+    <content><![CDATA[<blockquote>
+<p>未认证的RPC服务可能导致服务被攻击、注入恶意数据、数据泄露等安全问题。gRPC框架自带的两种安全认证方式，这里简单介绍这两种认证方式，并用Golang进行简单实现。</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="认证"><a href="#认证" class="headerlink" title="认证"></a>认证</h2><p>gRPC内置两种认证方式：</p>
+<ul>
+<li>SSL/TLS认证方式</li>
+<li>自定义认证方式</li>
+</ul>
+<h3 id="SSL-TLS认证"><a href="#SSL-TLS认证" class="headerlink" title="SSL/TLS认证"></a>SSL/TLS认证</h3><p>什么是SSL/TLS呢？SSL是安全套接字层(secure sockets layer),TLS是传输层安全 (transport layer security)，就是在应用层和TCP层之间新加一层加密，这样可以保证信息传输的安全性。</p>
+<h4 id="制作TLS证书"><a href="#制作TLS证书" class="headerlink" title="制作TLS证书"></a>制作TLS证书</h4><p>通过OpenSSL工具生成私钥，加密方式RSA，密码大小2048位。</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">$ openssl genrsa -out server.key 2048</span><br></pre></td></tr></table></figure>
+
+<p>使用私钥生成自签名的证书文件</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">openssl req -new -x509 -sha256 -key server.key -out server.pem -days 3650</span><br></pre></td></tr></table></figure>
+
+<p>填入证书自定义信息，注意<code>server name </code>填写的内容，后面会用到。</p>
+<h4 id="示例项目"><a href="#示例项目" class="headerlink" title="示例项目"></a>示例项目</h4><h5 id="First-server添加TLS认证"><a href="#First-server添加TLS认证" class="headerlink" title="First: server添加TLS认证"></a>First: server添加TLS认证</h5><p>通过密钥和刚刚制作的证书生成服务端传输证书。部分代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// TLS认证</span></span><br><span class="line">creds, err := credentials.NewServerTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;./keys/server.key&quot;</span> <span class="comment">/*制作证书存放路径*/</span>)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line">server := grpc.NewServer(grpc.Creds(creds))</span><br></pre></td></tr></table></figure>
+
+<h5 id="Second-client添加TLS认证"><a href="#Second-client添加TLS认证" class="headerlink" title="Second: client添加TLS认证"></a>Second: client添加TLS认证</h5><p>通过制作的证书生成客户端传输证书。部分代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// TLS认证</span></span><br><span class="line">creds, err := credentials.NewClientTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;server name&quot;</span> <span class="comment">/*制作证书时的server name*/</span>)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line">conn, err := grpc.Dial(<span class="string">&quot;localhost:9000&quot;</span>, grpc.WithTransportCredentials(creds))</span><br></pre></td></tr></table></figure>
+
+<p>到这里gRPC的TLS单向认证的简单实现就完成了。</p>
+<h3 id="自定义Token认证"><a href="#自定义Token认证" class="headerlink" title="自定义Token认证"></a>自定义Token认证</h3><p>通过自定义的身份认证方式进行认证客户端是否有权限。简单理解就是处理请求前对请求的内容进行身份认证。</p>
+<h4 id="示例项目-1"><a href="#示例项目-1" class="headerlink" title="示例项目"></a>示例项目</h4><h5 id="First-server添加鉴权拦截器"><a href="#First-server添加鉴权拦截器" class="headerlink" title="First: server添加鉴权拦截器"></a>First: server添加鉴权拦截器</h5><p>新增鉴权拦截器，示例代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Interceptor</span><span class="params">(ctx context.Context, req <span class="keyword">interface</span>&#123;&#125;, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">	err := Auth(ctx)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 继续处理请求</span></span><br><span class="line">	<span class="keyword">return</span> handler(ctx, req)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Auth</span><span class="params">(ctx context.Context)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	md, ok := metadata.FromIncomingContext(ctx)</span><br><span class="line">	<span class="keyword">if</span> !ok &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;无Token认证信息&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// authentication</span></span><br><span class="line">	val := md.Get(<span class="string">&quot;app_id&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(val) &lt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;app_id is empty&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	appID := val[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">	val = md.Get(<span class="string">&quot;secret_key&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(val) &lt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;secret_key is empty&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	appKey := val[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 简单模拟鉴权方式</span></span><br><span class="line">	<span class="keyword">if</span> _, ok := tokenMap[appID]; !ok || appKey != tokenMap[appID] &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;unauthorized&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>将鉴权拦截器加入服务选项，代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// token auth</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.UnaryInterceptor(interceptor.Interceptor))</span><br><span class="line"></span><br><span class="line"><span class="comment">// rpc server</span></span><br><span class="line">server := grpc.NewServer(opts...)</span><br></pre></td></tr></table></figure>
+
+
+
+<h5 id="second-client添加身份认证请求参数"><a href="#second-client添加身份认证请求参数" class="headerlink" title="second: client添加身份认证请求参数"></a>second: client添加身份认证请求参数</h5><h6 id="方式一：实现PerRPCCredentials接口"><a href="#方式一：实现PerRPCCredentials接口" class="headerlink" title="方式一：实现PerRPCCredentials接口"></a>方式一：实现PerRPCCredentials接口</h6><p>该接口有两个方法</p>
+<ol>
+<li><code>GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) </code> 返回请求的身份认证数据。</li>
+<li><code>RequireTransportSecurity() bool </code>返回是否开启TLS认证</li>
+</ol>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">type</span> authCredential <span class="keyword">struct</span>&#123;&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(*authCredential)</span> <span class="title">GetRequestMetadata</span><span class="params">(ctx context.Context, uri ...<span class="keyword">string</span>)</span> <span class="params">(<span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>, error)</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>&#123;<span class="string">&quot;app_id&quot;</span>:<span class="string">&quot;123456&quot;</span>,<span class="string">&quot;secret_key&quot;</span>:<span class="string">&quot;key&quot;</span>&#125;, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(*authCredential)</span> 	<span class="title">RequireTransportSecurity</span><span class="params">()</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>然后将该自定义认证加入到客户端选项中：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 自定义认证方式</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.WithPerRPCCredentials(<span class="built_in">new</span>(authCredential)))</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+
+
+<h6 id="方式二：context添加元数据"><a href="#方式二：context添加元数据" class="headerlink" title="方式二：context添加元数据"></a>方式二：context添加元数据</h6><p>请求方法的context添加身份认证元数据。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 认证参数</span></span><br><span class="line">md := metadata.Pairs(<span class="string">&quot;app_id&quot;</span>, <span class="string">&quot;123456&quot;</span>, <span class="string">&quot;secret_key&quot;</span>, <span class="string">&quot;secret_key&quot;</span>)</span><br><span class="line">ctx := metadata.NewOutgoingContext(context.Background(), md)</span><br><span class="line"></span><br><span class="line"><span class="comment">// todo </span></span><br><span class="line"><span class="comment">// resp := client.Function(ctx, reqMsg...)</span></span><br></pre></td></tr></table></figure>
+
+<p>到这自定义身份认证的简单实现就完成了。</p>
+<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+]]></content>
+      <categories>
+        <category>gRPC</category>
+      </categories>
+      <tags>
+        <tag>RPC</tag>
+        <tag>gRPC</tag>
+        <tag>SSL/TLS</tag>
       </tags>
   </entry>
   <entry>
