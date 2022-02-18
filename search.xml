@@ -1,227 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
-    <title>RPC序列（三）-gRPC安全认证</title>
-    <url>/2021/07/15/RPC%E5%BA%8F%E5%88%97%EF%BC%88%E4%B8%89%EF%BC%89-gRPC%E5%AE%89%E5%85%A8%E8%AE%A4%E8%AF%81/</url>
-    <content><![CDATA[<blockquote>
-<p>未认证的RPC服务可能导致服务被攻击、注入恶意数据、数据泄露等安全问题。gRPC框架自带的两种安全认证方式，这里简单介绍这两种认证方式，并用Golang进行简单实现。</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="认证"><a href="#认证" class="headerlink" title="认证"></a>认证</h2><p>gRPC内置两种认证方式：</p>
-<ul>
-<li>SSL/TLS认证方式</li>
-<li>自定义认证方式</li>
-</ul>
-<h3 id="SSL-TLS认证"><a href="#SSL-TLS认证" class="headerlink" title="SSL/TLS认证"></a>SSL/TLS认证</h3><p>什么是SSL/TLS呢？SSL是安全套接字层(secure sockets layer),TLS是传输层安全 (transport layer security)，就是在应用层和TCP层之间新加一层加密，这样可以保证信息传输的安全性。</p>
-<h4 id="制作TLS证书"><a href="#制作TLS证书" class="headerlink" title="制作TLS证书"></a>制作TLS证书</h4><p>通过OpenSSL工具生成私钥，加密方式RSA，密码大小2048位。</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">$ openssl genrsa -out server.key 2048</span><br></pre></td></tr></table></figure>
-
-<p>使用私钥生成自签名的证书文件</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">openssl req -new -x509 -sha256 -key server.key -out server.pem -days 3650</span><br></pre></td></tr></table></figure>
-
-<p>填入证书自定义信息，注意<code>server name </code>填写的内容，后面会用到。</p>
-<h4 id="示例项目"><a href="#示例项目" class="headerlink" title="示例项目"></a>示例项目</h4><h5 id="First-server添加TLS认证"><a href="#First-server添加TLS认证" class="headerlink" title="First: server添加TLS认证"></a>First: server添加TLS认证</h5><p>通过密钥和刚刚制作的证书生成服务端传输证书。部分代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// TLS认证</span></span><br><span class="line">creds, err := credentials.NewServerTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;./keys/server.key&quot;</span> <span class="comment">/*制作证书存放路径*/</span>)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line">server := grpc.NewServer(grpc.Creds(creds))</span><br></pre></td></tr></table></figure>
-
-<h5 id="Second-client添加TLS认证"><a href="#Second-client添加TLS认证" class="headerlink" title="Second: client添加TLS认证"></a>Second: client添加TLS认证</h5><p>通过制作的证书生成客户端传输证书。部分代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// TLS认证</span></span><br><span class="line">creds, err := credentials.NewClientTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;server name&quot;</span> <span class="comment">/*制作证书时的server name*/</span>)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line">conn, err := grpc.Dial(<span class="string">&quot;localhost:9000&quot;</span>, grpc.WithTransportCredentials(creds))</span><br></pre></td></tr></table></figure>
-
-<p>到这里gRPC的TLS单向认证的简单实现就完成了。</p>
-<h3 id="自定义Token认证"><a href="#自定义Token认证" class="headerlink" title="自定义Token认证"></a>自定义Token认证</h3><p>通过自定义的身份认证方式进行认证客户端是否有权限。简单理解就是处理请求前对请求的内容进行身份认证。</p>
-<h4 id="示例项目-1"><a href="#示例项目-1" class="headerlink" title="示例项目"></a>示例项目</h4><h5 id="First-server添加鉴权拦截器"><a href="#First-server添加鉴权拦截器" class="headerlink" title="First: server添加鉴权拦截器"></a>First: server添加鉴权拦截器</h5><p>新增鉴权拦截器，示例代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Interceptor</span><span class="params">(ctx context.Context, req <span class="keyword">interface</span>&#123;&#125;, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">	err := Auth(ctx)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 继续处理请求</span></span><br><span class="line">	<span class="keyword">return</span> handler(ctx, req)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Auth</span><span class="params">(ctx context.Context)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	md, ok := metadata.FromIncomingContext(ctx)</span><br><span class="line">	<span class="keyword">if</span> !ok &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;无Token认证信息&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// authentication</span></span><br><span class="line">	val := md.Get(<span class="string">&quot;app_id&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(val) &lt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;app_id is empty&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	appID := val[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">	val = md.Get(<span class="string">&quot;secret_key&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(val) &lt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;secret_key is empty&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	appKey := val[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 简单模拟鉴权方式</span></span><br><span class="line">	<span class="keyword">if</span> _, ok := tokenMap[appID]; !ok || appKey != tokenMap[appID] &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;unauthorized&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>将鉴权拦截器加入服务选项，代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// token auth</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.UnaryInterceptor(interceptor.Interceptor))</span><br><span class="line"></span><br><span class="line"><span class="comment">// rpc server</span></span><br><span class="line">server := grpc.NewServer(opts...)</span><br></pre></td></tr></table></figure>
-
-
-
-<h5 id="second-client添加身份认证请求参数"><a href="#second-client添加身份认证请求参数" class="headerlink" title="second: client添加身份认证请求参数"></a>second: client添加身份认证请求参数</h5><h6 id="方式一：实现PerRPCCredentials接口"><a href="#方式一：实现PerRPCCredentials接口" class="headerlink" title="方式一：实现PerRPCCredentials接口"></a>方式一：实现PerRPCCredentials接口</h6><p>该接口有两个方法</p>
-<ol>
-<li><code>GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) </code> 返回请求的身份认证数据。</li>
-<li><code>RequireTransportSecurity() bool </code>返回是否开启TLS认证</li>
-</ol>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">type</span> authCredential <span class="keyword">struct</span>&#123;&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(*authCredential)</span> <span class="title">GetRequestMetadata</span><span class="params">(ctx context.Context, uri ...<span class="keyword">string</span>)</span> <span class="params">(<span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>, error)</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>&#123;<span class="string">&quot;app_id&quot;</span>:<span class="string">&quot;123456&quot;</span>,<span class="string">&quot;secret_key&quot;</span>:<span class="string">&quot;key&quot;</span>&#125;, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(*authCredential)</span> 	<span class="title">RequireTransportSecurity</span><span class="params">()</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>然后将该自定义认证加入到客户端选项中：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 自定义认证方式</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.WithPerRPCCredentials(<span class="built_in">new</span>(authCredential)))</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-
-
-
-<h6 id="方式二：context添加元数据"><a href="#方式二：context添加元数据" class="headerlink" title="方式二：context添加元数据"></a>方式二：context添加元数据</h6><p>请求方法的context添加身份认证元数据。</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 认证参数</span></span><br><span class="line">md := metadata.Pairs(<span class="string">&quot;app_id&quot;</span>, <span class="string">&quot;123456&quot;</span>, <span class="string">&quot;secret_key&quot;</span>, <span class="string">&quot;secret_key&quot;</span>)</span><br><span class="line">ctx := metadata.NewOutgoingContext(context.Background(), md)</span><br><span class="line"></span><br><span class="line"><span class="comment">// todo </span></span><br><span class="line"><span class="comment">// resp := client.Function(ctx, reqMsg...)</span></span><br></pre></td></tr></table></figure>
-
-<p>到这自定义身份认证的简单实现就完成了。</p>
-<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
-
-
-
-
-
-]]></content>
-      <categories>
-        <category>gRPC</category>
-      </categories>
-      <tags>
-        <tag>gRPC</tag>
-        <tag>RPC</tag>
-        <tag>SSL/TLS</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>RPC系列（一）-RPC与RUST比较</title>
-    <url>/2021/07/06/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-RPC%E4%B8%8ERUST%E6%AF%94%E8%BE%83/</url>
-    <content><![CDATA[<blockquote>
-<p>本篇文章主要介绍RPC是什么，RPC的具体过程，RPC和RUST的比较以及如何选择。</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="RPC是什么"><a href="#RPC是什么" class="headerlink" title="RPC是什么"></a>RPC是什么</h2><p>RPC(Remote Procedure Call)是远程过程调用的简称。主要目的就是一个应用调用另一个应用的方法，调用方通过调用代理方法的形式调用被调用方的实现方法。调用协议常包括通信协议和序列化协议。底层的通信协议可以是HTTP、TCP等，根据不同的RPC框架而定。序列化协议常用ProtoBuf协议。</p>
-<h2 id="RPC具体过程"><a href="#RPC具体过程" class="headerlink" title="RPC具体过程"></a>RPC具体过程</h2><p><img src="/images/rpc%E5%85%B7%E4%BD%93%E6%B5%81%E7%A8%8B.png" alt="rpc具体流程"></p>
-<h2 id="RPC和RUST比较"><a href="#RPC和RUST比较" class="headerlink" title="RPC和RUST比较"></a>RPC和RUST比较</h2><p>RUST是基于HTTP协议的RESTFul API设计风格的通信方式，也常用于应用之间的信息通信。但设计理念和底层原理是完全不同的。</p>
-<p>HTTP+Rustful的优点是可读性好，支持跨语言。在运用之间通信的使用超越RPC。但缺点也很明显，HTTP是第七层协议，报文包含大量头部信息，有用信息占比少，因此效率和速度较低。另外使用HTTP协议调用接口封装封装，常需要封装很多参数以及校验方法。RPC则更好与其互补，但牺牲可读性来通过效率和性能是可取的。具体怎么选，需根据业务来，灵活站位。</p>
-<h2 id="RPC使用场景"><a href="#RPC使用场景" class="headerlink" title="RPC使用场景"></a>RPC使用场景</h2><p>Rustful常用于与第三方系统之间的信息通信，通过对外调用的接口。</p>
-<p>RPC常用于自家系统之间的互相调用，更安全高效。</p>
-]]></content>
-      <categories>
-        <category>RPC</category>
-      </categories>
-      <tags>
-        <tag>RPC</tag>
-        <tag>RUST</tag>
-        <tag>Rustful</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>RPC系列（四）-HTTP网关</title>
-    <url>/2021/07/17/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E5%9B%9B%EF%BC%89-HTTP%E7%BD%91%E5%85%B3/</url>
-    <content><![CDATA[<blockquote>
-<p>gPRC网关是通过接收HTTP请求进行转换成gRPC的客户端请求发送给服务端的过程。这里介绍gRPC中HTTP网关的具体实现以及代码实现。</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="HTTP网关"><a href="#HTTP网关" class="headerlink" title="HTTP网关"></a>HTTP网关</h2><p>​        有时同一套业务代码我们既需要gRPC服务又需要HTTP服务，写两个服务又有点重复工作，而且维护两个版本的服务显然又不太合理，于是GRPC网关（grpc-gateway）就诞生了。它是通过protobuf的自定义option实现了一个网关，服务可以开启HTTP服务来接收HTTP请求，通过将请求数据转换成gRPC客户端请求发送个gRPC服务端，服务又将gRPC服务端的响应转化成HTTP响应返回给请求方。</p>
-<h2 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h2><p>安装grpc-gateway, 这样protobuf就能生成gRPC网关相关代码</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">go get -u github.com&#x2F;grpc-ecosystem&#x2F;grpc-gateway&#x2F;protoc-gen-grpc-gateway</span><br></pre></td></tr></table></figure>
-
-
-
-
-
-<h2 id="示例"><a href="#示例" class="headerlink" title="示例"></a>示例</h2><h3 id="HTTP服务"><a href="#HTTP服务" class="headerlink" title="HTTP服务"></a>HTTP服务</h3><p>通过开启一个HTTP服务来接收http请求，通过将请求数据转换成gRPC客户端请求发送个gRPC服务端来实现整个请求过程。</p>
-<h4 id="1-proto文件新增http-option"><a href="#1-proto文件新增http-option" class="headerlink" title="1.proto文件新增http option"></a>1.proto文件新增http option</h4><p>在前几节的massage.proto文件中的Hello方法新增http option, post请求，路由为<code>/hello</code>。</p>
-<figure class="highlight protobuf"><table><tr><td class="code"><pre><span class="line">syntax = <span class="string">&quot;proto3&quot;</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">package</span> protobuf;</span><br><span class="line"><span class="keyword">option</span> go_package = <span class="string">&quot;./;protobuf&quot;</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> <span class="string">&quot;google/api/annotations.proto&quot;</span>;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">service</span> <span class="title">HelloService</span></span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">rpc</span> Hello(Massage) <span class="keyword">returns</span> (Massage) </span>&#123;</span><br><span class="line">      <span class="comment">// http option</span></span><br><span class="line">      <span class="keyword">option</span> (google.api.http) = &#123;</span><br><span class="line">        post: <span class="string">&quot;/hello&quot;</span></span><br><span class="line">        body: <span class="string">&quot;*&quot;</span></span><br><span class="line">      &#125;;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">......</span><br></pre></td></tr></table></figure>
-
-
-
-<h4 id="2-生成gRPC网关相关代码"><a href="#2-生成gRPC网关相关代码" class="headerlink" title="2.生成gRPC网关相关代码"></a>2.生成gRPC网关相关代码</h4><p>通过protoc命令生成gRPC网关相关代码。这里需要引入google api的proto文件。</p>
-<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">protoc --go_out=. -I=. -I$GOPATH/src/github.com/googleapis/googleapis massage.proto</span><br><span class="line"></span><br><span class="line">protoc --go-grpc_out=. -I=. -I$GOPATH/src/github.com/googleapis/googleapis massage.proto</span><br><span class="line"></span><br><span class="line">protoc --grpc-gateway_out=logtostderr=true:. -I=. -I$GOPATH/src/github.com/googleapis/googleapis massage.proto</span><br></pre></td></tr></table></figure>
-
-
-
-<h4 id="3-新增HTTP服务代码"><a href="#3-新增HTTP服务代码" class="headerlink" title="3.新增HTTP服务代码"></a>3.新增HTTP服务代码</h4><p>新增http_server/main.go, 实现http服务，相关认证选项和拦截器选项参考前几章客户端请求选项，这里自演示部分代码。</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">ctx, cancel := context.WithCancel(context.Background())</span><br><span class="line"><span class="keyword">defer</span> cancel()</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">endPoint := <span class="string">&quot;127.0.0.1:9000&quot;</span></span><br><span class="line">mux := runtime.NewServeMux()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 添加客户端请求选项</span></span><br><span class="line">opts := <span class="built_in">make</span>([]grpc.DialOption, <span class="number">0</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// TLS认证（如果开启TLS认证）</span></span><br><span class="line">creds, err := credentials.NewClientTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;www.zhouxuwen.com&quot;</span>)</span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.WithTransportCredentials(creds))</span><br><span class="line"></span><br><span class="line"><span class="comment">// 自定义认证方式（如果开启自定义认证）</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.WithPerRPCCredentials(<span class="built_in">new</span>(authCredential)))</span><br><span class="line"></span><br><span class="line"><span class="comment">// HTTP转grpc</span></span><br><span class="line">err = protobuf.RegisterHelloServiceHandlerFromEndpoint(ctx, mux, endPoint, opts)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;Register handler err:%v\n&quot;</span>, err)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">fmt.Printf(<span class="string">&quot;HTTP Listen on 8080\n&quot;</span>)</span><br><span class="line">http.ListenAndServe(<span class="string">&quot;:8080&quot;</span>, mux)</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-
-
-
-<h4 id="4-启动HTTP服务和gRPC服务端"><a href="#4-启动HTTP服务和gRPC服务端" class="headerlink" title="4.启动HTTP服务和gRPC服务端"></a>4.启动HTTP服务和gRPC服务端</h4><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line"><span class="meta">&gt;</span><span class="bash"> curl -X POST -d <span class="string">&#x27;&#123;&quot;massage&quot;:&quot;grpc gateway&quot;&#125;&#x27;</span> http://127.0.0.1:8080/hello</span></span><br><span class="line"><span class="meta">&gt;</span><span class="bash"> &#123;<span class="string">&quot;massage&quot;</span>:<span class="string">&quot;hello grpc gateway !&quot;</span>&#125;</span></span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="升级gRPC服务端"><a href="#升级gRPC服务端" class="headerlink" title="升级gRPC服务端"></a>升级gRPC服务端</h3><p>上面方法通过新开启一个HTTP服务实现了通过http请求转换成gRPC客户端请求发送服务端。这样我们是同时开启HTTP和gRPC两个服务，虽然解决了了重复工作的问题，但我们还是得维护两个服务，也不太合适，我们可以将这两个服务整合在一起，共用同一端口号。同时提供http和gRPC两种调用方式。</p>
-<h4 id="1-修改gRPC服务端代码"><a href="#1-修改gRPC服务端代码" class="headerlink" title="1.修改gRPC服务端代码"></a>1.修改gRPC服务端代码</h4><p>只需要修改gRPC服务端代码，将之前的gRPC服务端加上http网关相关，代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">	endPoint := <span class="string">&quot;localhost:9000&quot;</span></span><br><span class="line">	listen, err := net.Listen(<span class="string">&quot;tcp&quot;</span>, endPoint)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;tcp listen err:%v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// rpc server</span></span><br><span class="line">	opts := <span class="built_in">make</span>([]grpc.ServerOption, <span class="number">0</span>)</span><br><span class="line">	creds, err := credentials.NewServerTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;./keys/server.key&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// TLS认证</span></span><br><span class="line">	opts = <span class="built_in">append</span>(opts, grpc.Creds(creds))</span><br><span class="line">	<span class="comment">// 自定义认证</span></span><br><span class="line">	opts = <span class="built_in">append</span>(opts, grpc.UnaryInterceptor(interceptor.Interceptor))</span><br><span class="line">	server := grpc.NewServer(opts...)</span><br><span class="line">	protobuf.RegisterHelloServiceServer(server, &amp;service.HelloService)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">	<span class="comment">// http gateway server</span></span><br><span class="line">	gwOpts := <span class="built_in">make</span>([]grpc.DialOption, <span class="number">0</span>)</span><br><span class="line">	gwCreds, err := credentials.NewClientTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;www.zhouxuwen.com&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// tls认证</span></span><br><span class="line">	gwOpts = <span class="built_in">append</span>(gwOpts, grpc.WithTransportCredentials(gwCreds))</span><br><span class="line">	<span class="comment">// 自定义认证方式</span></span><br><span class="line">	gwOpts = <span class="built_in">append</span>(gwOpts, grpc.WithPerRPCCredentials(&amp;interceptor.AuthCredential))</span><br><span class="line">	<span class="comment">// 请求拦截</span></span><br><span class="line">	gwOpts = <span class="built_in">append</span>(gwOpts, grpc.WithUnaryInterceptor(interceptor.ClientInterceptor))</span><br><span class="line"></span><br><span class="line">	gwmux := runtime.NewServeMux()</span><br><span class="line">	err = protobuf.RegisterHelloServiceHandlerFromEndpoint(context.Background(), gwmux, endPoint, gwOpts)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;register http gateway server fail. err: %v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"></span><br><span class="line">	<span class="comment">// http server</span></span><br><span class="line">	mux := http.NewServeMux()</span><br><span class="line">	mux.Handle(<span class="string">&quot;/&quot;</span>, gwmux)</span><br><span class="line">	tlsConfig, err := getTLSConfig()</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;get tls config err :%v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">// http and gRPC server</span></span><br><span class="line">	srv := &amp;http.Server&#123;</span><br><span class="line">		Addr:      endPoint,</span><br><span class="line">		Handler:   grpcHandlerFunc(server, mux),</span><br><span class="line">		TLSConfig: tlsConfig,</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	fmt.Printf(<span class="string">&quot;gRPC and http listen at :%v\n&quot;</span>, endPoint)</span><br><span class="line">	err = srv.Serve(tls.NewListener(listen, tlsConfig))</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;%v\n&quot;</span>, errors.New(fmt.Sprintf(<span class="string">&quot;failed to serve: %v&quot;</span>, err)))</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">getTLSConfig</span><span class="params">()</span> <span class="params">(*tls.Config, error)</span></span> &#123;</span><br><span class="line">	cert, _ := ioutil.ReadFile(<span class="string">&quot;./keys/server.pem&quot;</span>)</span><br><span class="line">	key, _ := ioutil.ReadFile(<span class="string">&quot;./keys/server.key&quot;</span>)</span><br><span class="line">	<span class="keyword">var</span> demoKeyPair *tls.Certificate</span><br><span class="line">	pair, err := tls.X509KeyPair(cert, key)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;TLS KeyPair err: %v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">	&#125;</span><br><span class="line">	demoKeyPair = &amp;pair</span><br><span class="line">	<span class="keyword">return</span> &amp;tls.Config&#123;</span><br><span class="line">		Certificates: []tls.Certificate&#123;*demoKeyPair&#125;,</span><br><span class="line">		NextProtos:   []<span class="keyword">string</span>&#123;http2.NextProtoTLS&#125;, <span class="comment">// HTTP2 TLS支持</span></span><br><span class="line">	&#125;, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">// grpcHandlerFunc returns an http.Handler that delegates to grpcServer on incoming gRPC</span></span><br><span class="line"><span class="comment">// connections or otherHandler otherwise. Copied from cockroachdb.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">grpcHandlerFunc</span><span class="params">(grpcServer *grpc.Server, otherHandler http.Handler)</span> <span class="title">http</span>.<span class="title">Handler</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> otherHandler == <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> http.HandlerFunc(<span class="function"><span class="keyword">func</span><span class="params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;</span><br><span class="line">			grpcServer.ServeHTTP(w, r)</span><br><span class="line">		&#125;)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> http.HandlerFunc(<span class="function"><span class="keyword">func</span><span class="params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;</span><br><span class="line">		<span class="keyword">if</span> r.ProtoMajor == <span class="number">2</span> &amp;&amp; strings.Contains(r.Header.Get(<span class="string">&quot;Content-Type&quot;</span>), <span class="string">&quot;application/grpc&quot;</span>) &#123;</span><br><span class="line">			grpcServer.ServeHTTP(w, r)</span><br><span class="line">		&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">			otherHandler.ServeHTTP(w, r)</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h4 id="2-启动服务"><a href="#2-启动服务" class="headerlink" title="2.启动服务"></a>2.启动服务</h4><p>启动服务，通过gRPC客户端和http请求的方式进行验证。</p>
-<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line"><span class="meta">&gt;</span><span class="bash"> curl -X POST -k https://127.0.0.1:9000/hello -d <span class="string">&#x27;&#123;&quot;massage&quot;:&quot;grpc and http&quot;&#125;&#x27;</span></span></span><br><span class="line"><span class="meta">&gt;</span><span class="bash"> &#123;<span class="string">&quot;massage&quot;</span>:<span class="string">&quot;hello grpc and http !&quot;</span>&#125;%</span></span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
-
-
-
-]]></content>
-      <categories>
-        <category>gRPC</category>
-      </categories>
-      <tags>
-        <tag>gRPC</tag>
-        <tag>HTTP</tag>
-        <tag>gateway</tag>
-        <tag>grpc-gateway</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>RPC系列（二）-gRPC入门</title>
-    <url>/2021/07/08/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%BA%8C%EF%BC%89-gRPC%E5%85%A5%E9%97%A8/</url>
-    <content><![CDATA[<blockquote>
-<p>简单介绍gRPC和ProtoBuf，以及gRPC和ProtoBuf的安装和简单使用，并用golang实现简单RPC服务。</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="gRPC简介"><a href="#gRPC简介" class="headerlink" title="gRPC简介"></a>gRPC简介</h2><p><a href="https://grpc.io/">gRPC</a> 是由Google开发的远程过程调用开源框架，支持多种开发语言，且支持跨语言通信。是基于HTTP2通信协议标准设计开发,默认采用Protocol Buffers数据序列化协议。</p>
-<h3 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">go get google.golang.org&#x2F;grpc</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">go install google.golang.org&#x2F;protobuf&#x2F;cmd&#x2F;protoc-gen-go</span><br><span class="line">go install google.golang.org&#x2F;grpc&#x2F;cmd&#x2F;protoc-gen-go-grpc</span><br></pre></td></tr></table></figure>
-
-
-
-<h2 id="ProtoBuf简介"><a href="#ProtoBuf简介" class="headerlink" title="ProtoBuf简介"></a>ProtoBuf简介</h2><p>gRPC跨语言的支持都是通过<code>Protocol Buffers</code>这个东西，它是一个代码生成工具以及序列化工具。它可以把我们定义好的方法和数据结构转化成指定语言的代码。同时能将我们请求和响应的数据编码成gRPC能传输的形式，又能将数据序列化和反序列化成该语言能处理的形式。</p>
-<h3 id="安装-1"><a href="#安装-1" class="headerlink" title="安装"></a>安装</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">brew info protobuf</span><br></pre></td></tr></table></figure>
-
-<h3 id="使用命令"><a href="#使用命令" class="headerlink" title="使用命令"></a>使用命令</h3><p>这里不整理Protobuf文件的语法，<a href="http://www.topgoer.com/%E5%BE%AE%E6%9C%8D%E5%8A%A1/gRPC/Protobuf%E8%AF%AD%E6%B3%95.html">Protobuf语法</a>看这里。</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">protoc -I&#x3D;$SRC_DIR --go_out&#x3D;$DST_DIR $SRC_DIR&#x2F;fileName.proto</span><br><span class="line"></span><br><span class="line">protoc -I&#x3D;$SRC_DIR --go-grpc_out&#x3D;$DST_DIR $SRC_DIR&#x2F;fileName.proto</span><br></pre></td></tr></table></figure>
-
-<p>$SRC_DIR : 待编译的proto文件所在目录</p>
-<p>$DST_DIR：生成后的代码所存放的目录</p>
-<h2 id="简单示例"><a href="#简单示例" class="headerlink" title="简单示例"></a>简单示例</h2><h3 id="First-proto文件编写和生成源码"><a href="#First-proto文件编写和生成源码" class="headerlink" title="First: proto文件编写和生成源码"></a>First: proto文件编写和生成源码</h3><p>proto文件书写，先定义该通信用到的数据类型和结构，请求和响应的数据模型。</p>
-<figure class="highlight protobuf"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">message</span> <span class="title">Massage</span> </span>&#123;</span><br><span class="line">  <span class="built_in">string</span> request = <span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>再定义该通信的方法，只需要定义方法名、请求参数、响应参数即可。</p>
-<figure class="highlight protobuf"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">service</span> <span class="title">HelloService</span></span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">rpc</span> Hello(Massage) <span class="keyword">returns</span> (Massage)</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>通过protoc命名生成指定语言的代码，这里是生成go语言的代码。</p>
-<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">protoc --go_out=. massage.proto</span><br><span class="line">protoc --go-grpc_out=. massage.proto</span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="Second-Server代码编写"><a href="#Second-Server代码编写" class="headerlink" title="Second: Server代码编写"></a>Second: Server代码编写</h3><p>HelloService方法的具体实现，这里简单实现。</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(h *helloService)</span> <span class="title">Hello</span><span class="params">(c context.Context, requestMessage *protobuf.Massage)</span> <span class="params">(responseMessage *protobuf.Massage, err error)</span></span> &#123;</span><br><span class="line">	msg := <span class="string">&quot;hello &quot;</span> + requestMessage.Request</span><br><span class="line">	responseMessage = &amp;protobuf.Massage&#123;Request: msg&#125;</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>创建rpc服务，注册通信方法的具体实现。</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">server := grpc.NewServer()</span><br><span class="line">protobuf.RegisterHelloServiceServer(server, &amp;service.HelloService)</span><br></pre></td></tr></table></figure>
-
-<p>监听端口，至此简单的rpc服务就写完了。</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">listen, err := net.Listen(<span class="string">&quot;tcp&quot;</span>, <span class="string">&quot;localhost:9000&quot;</span>)</span><br><span class="line">err = server.Serve(listen)</span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="Third：Client代码编写"><a href="#Third：Client代码编写" class="headerlink" title="Third：Client代码编写"></a>Third：Client代码编写</h3><p>创建rpc客户端，建立连接。</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">conn, err := grpc.Dial(<span class="string">&quot;localhost:9000&quot;</span>, grpc.WithInsecure())</span><br><span class="line">c := protobuf.NewHelloServiceClient(conn)</span><br></pre></td></tr></table></figure>
-
-<p>发送请求信息以及读取响应信息。</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">requestMessage := &amp;protobuf.Massage&#123;Request: <span class="string">&quot;world &quot;</span>&#125;</span><br><span class="line">responseMessage, err := c.Hello(context.Background(), requestMessage)</span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
-
-
-
-]]></content>
-      <categories>
-        <category>gRPC</category>
-      </categories>
-      <tags>
-        <tag>gRPC</tag>
-        <tag>RPC</tag>
-        <tag>ProtoBuf</tag>
-        <tag>Golang</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>Golang性能优化篇</title>
     <url>/2022/02/11/Golang%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%AF%87/</url>
     <content><![CDATA[<blockquote>
@@ -306,6 +85,134 @@
       </tags>
   </entry>
   <entry>
+    <title>RPC系列（二）-gRPC入门</title>
+    <url>/2021/07/08/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%BA%8C%EF%BC%89-gRPC%E5%85%A5%E9%97%A8/</url>
+    <content><![CDATA[<blockquote>
+<p>简单介绍gRPC和ProtoBuf，以及gRPC和ProtoBuf的安装和简单使用，并用golang实现简单RPC服务。</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="gRPC简介"><a href="#gRPC简介" class="headerlink" title="gRPC简介"></a>gRPC简介</h2><p><a href="https://grpc.io/">gRPC</a> 是由Google开发的远程过程调用开源框架，支持多种开发语言，且支持跨语言通信。是基于HTTP2通信协议标准设计开发,默认采用Protocol Buffers数据序列化协议。</p>
+<h3 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">go get google.golang.org&#x2F;grpc</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">go install google.golang.org&#x2F;protobuf&#x2F;cmd&#x2F;protoc-gen-go</span><br><span class="line">go install google.golang.org&#x2F;grpc&#x2F;cmd&#x2F;protoc-gen-go-grpc</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="ProtoBuf简介"><a href="#ProtoBuf简介" class="headerlink" title="ProtoBuf简介"></a>ProtoBuf简介</h2><p>gRPC跨语言的支持都是通过<code>Protocol Buffers</code>这个东西，它是一个代码生成工具以及序列化工具。它可以把我们定义好的方法和数据结构转化成指定语言的代码。同时能将我们请求和响应的数据编码成gRPC能传输的形式，又能将数据序列化和反序列化成该语言能处理的形式。</p>
+<h3 id="安装-1"><a href="#安装-1" class="headerlink" title="安装"></a>安装</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">brew info protobuf</span><br></pre></td></tr></table></figure>
+
+<h3 id="使用命令"><a href="#使用命令" class="headerlink" title="使用命令"></a>使用命令</h3><p>这里不整理Protobuf文件的语法，<a href="http://www.topgoer.com/%E5%BE%AE%E6%9C%8D%E5%8A%A1/gRPC/Protobuf%E8%AF%AD%E6%B3%95.html">Protobuf语法</a>看这里。</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">protoc -I&#x3D;$SRC_DIR --go_out&#x3D;$DST_DIR $SRC_DIR&#x2F;fileName.proto</span><br><span class="line"></span><br><span class="line">protoc -I&#x3D;$SRC_DIR --go-grpc_out&#x3D;$DST_DIR $SRC_DIR&#x2F;fileName.proto</span><br></pre></td></tr></table></figure>
+
+<p>$SRC_DIR : 待编译的proto文件所在目录</p>
+<p>$DST_DIR：生成后的代码所存放的目录</p>
+<h2 id="简单示例"><a href="#简单示例" class="headerlink" title="简单示例"></a>简单示例</h2><h3 id="First-proto文件编写和生成源码"><a href="#First-proto文件编写和生成源码" class="headerlink" title="First: proto文件编写和生成源码"></a>First: proto文件编写和生成源码</h3><p>proto文件书写，先定义该通信用到的数据类型和结构，请求和响应的数据模型。</p>
+<figure class="highlight protobuf"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">message</span> <span class="title">Massage</span> </span>&#123;</span><br><span class="line">  <span class="built_in">string</span> request = <span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>再定义该通信的方法，只需要定义方法名、请求参数、响应参数即可。</p>
+<figure class="highlight protobuf"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">service</span> <span class="title">HelloService</span></span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">rpc</span> Hello(Massage) <span class="keyword">returns</span> (Massage)</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>通过protoc命名生成指定语言的代码，这里是生成go语言的代码。</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">protoc --go_out=. massage.proto</span><br><span class="line">protoc --go-grpc_out=. massage.proto</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="Second-Server代码编写"><a href="#Second-Server代码编写" class="headerlink" title="Second: Server代码编写"></a>Second: Server代码编写</h3><p>HelloService方法的具体实现，这里简单实现。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(h *helloService)</span> <span class="title">Hello</span><span class="params">(c context.Context, requestMessage *protobuf.Massage)</span> <span class="params">(responseMessage *protobuf.Massage, err error)</span></span> &#123;</span><br><span class="line">	msg := <span class="string">&quot;hello &quot;</span> + requestMessage.Request</span><br><span class="line">	responseMessage = &amp;protobuf.Massage&#123;Request: msg&#125;</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>创建rpc服务，注册通信方法的具体实现。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">server := grpc.NewServer()</span><br><span class="line">protobuf.RegisterHelloServiceServer(server, &amp;service.HelloService)</span><br></pre></td></tr></table></figure>
+
+<p>监听端口，至此简单的rpc服务就写完了。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">listen, err := net.Listen(<span class="string">&quot;tcp&quot;</span>, <span class="string">&quot;localhost:9000&quot;</span>)</span><br><span class="line">err = server.Serve(listen)</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="Third：Client代码编写"><a href="#Third：Client代码编写" class="headerlink" title="Third：Client代码编写"></a>Third：Client代码编写</h3><p>创建rpc客户端，建立连接。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">conn, err := grpc.Dial(<span class="string">&quot;localhost:9000&quot;</span>, grpc.WithInsecure())</span><br><span class="line">c := protobuf.NewHelloServiceClient(conn)</span><br></pre></td></tr></table></figure>
+
+<p>发送请求信息以及读取响应信息。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">requestMessage := &amp;protobuf.Massage&#123;Request: <span class="string">&quot;world &quot;</span>&#125;</span><br><span class="line">responseMessage, err := c.Hello(context.Background(), requestMessage)</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
+
+
+
+]]></content>
+      <categories>
+        <category>gRPC</category>
+      </categories>
+      <tags>
+        <tag>Golang</tag>
+        <tag>RPC</tag>
+        <tag>gRPC</tag>
+        <tag>ProtoBuf</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>RPC系列（四）-HTTP网关</title>
+    <url>/2021/07/17/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E5%9B%9B%EF%BC%89-HTTP%E7%BD%91%E5%85%B3/</url>
+    <content><![CDATA[<blockquote>
+<p>gPRC网关是通过接收HTTP请求进行转换成gRPC的客户端请求发送给服务端的过程。这里介绍gRPC中HTTP网关的具体实现以及代码实现。</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="HTTP网关"><a href="#HTTP网关" class="headerlink" title="HTTP网关"></a>HTTP网关</h2><p>​        有时同一套业务代码我们既需要gRPC服务又需要HTTP服务，写两个服务又有点重复工作，而且维护两个版本的服务显然又不太合理，于是GRPC网关（grpc-gateway）就诞生了。它是通过protobuf的自定义option实现了一个网关，服务可以开启HTTP服务来接收HTTP请求，通过将请求数据转换成gRPC客户端请求发送个gRPC服务端，服务又将gRPC服务端的响应转化成HTTP响应返回给请求方。</p>
+<h2 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h2><p>安装grpc-gateway, 这样protobuf就能生成gRPC网关相关代码</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">go get -u github.com&#x2F;grpc-ecosystem&#x2F;grpc-gateway&#x2F;protoc-gen-grpc-gateway</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+<h2 id="示例"><a href="#示例" class="headerlink" title="示例"></a>示例</h2><h3 id="HTTP服务"><a href="#HTTP服务" class="headerlink" title="HTTP服务"></a>HTTP服务</h3><p>通过开启一个HTTP服务来接收http请求，通过将请求数据转换成gRPC客户端请求发送个gRPC服务端来实现整个请求过程。</p>
+<h4 id="1-proto文件新增http-option"><a href="#1-proto文件新增http-option" class="headerlink" title="1.proto文件新增http option"></a>1.proto文件新增http option</h4><p>在前几节的massage.proto文件中的Hello方法新增http option, post请求，路由为<code>/hello</code>。</p>
+<figure class="highlight protobuf"><table><tr><td class="code"><pre><span class="line">syntax = <span class="string">&quot;proto3&quot;</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">package</span> protobuf;</span><br><span class="line"><span class="keyword">option</span> go_package = <span class="string">&quot;./;protobuf&quot;</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> <span class="string">&quot;google/api/annotations.proto&quot;</span>;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">service</span> <span class="title">HelloService</span></span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">rpc</span> Hello(Massage) <span class="keyword">returns</span> (Massage) </span>&#123;</span><br><span class="line">      <span class="comment">// http option</span></span><br><span class="line">      <span class="keyword">option</span> (google.api.http) = &#123;</span><br><span class="line">        post: <span class="string">&quot;/hello&quot;</span></span><br><span class="line">        body: <span class="string">&quot;*&quot;</span></span><br><span class="line">      &#125;;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">......</span><br></pre></td></tr></table></figure>
+
+
+
+<h4 id="2-生成gRPC网关相关代码"><a href="#2-生成gRPC网关相关代码" class="headerlink" title="2.生成gRPC网关相关代码"></a>2.生成gRPC网关相关代码</h4><p>通过protoc命令生成gRPC网关相关代码。这里需要引入google api的proto文件。</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">protoc --go_out=. -I=. -I$GOPATH/src/github.com/googleapis/googleapis massage.proto</span><br><span class="line"></span><br><span class="line">protoc --go-grpc_out=. -I=. -I$GOPATH/src/github.com/googleapis/googleapis massage.proto</span><br><span class="line"></span><br><span class="line">protoc --grpc-gateway_out=logtostderr=true:. -I=. -I$GOPATH/src/github.com/googleapis/googleapis massage.proto</span><br></pre></td></tr></table></figure>
+
+
+
+<h4 id="3-新增HTTP服务代码"><a href="#3-新增HTTP服务代码" class="headerlink" title="3.新增HTTP服务代码"></a>3.新增HTTP服务代码</h4><p>新增http_server/main.go, 实现http服务，相关认证选项和拦截器选项参考前几章客户端请求选项，这里自演示部分代码。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">ctx, cancel := context.WithCancel(context.Background())</span><br><span class="line"><span class="keyword">defer</span> cancel()</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">endPoint := <span class="string">&quot;127.0.0.1:9000&quot;</span></span><br><span class="line">mux := runtime.NewServeMux()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 添加客户端请求选项</span></span><br><span class="line">opts := <span class="built_in">make</span>([]grpc.DialOption, <span class="number">0</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// TLS认证（如果开启TLS认证）</span></span><br><span class="line">creds, err := credentials.NewClientTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;www.zhouxuwen.com&quot;</span>)</span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.WithTransportCredentials(creds))</span><br><span class="line"></span><br><span class="line"><span class="comment">// 自定义认证方式（如果开启自定义认证）</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.WithPerRPCCredentials(<span class="built_in">new</span>(authCredential)))</span><br><span class="line"></span><br><span class="line"><span class="comment">// HTTP转grpc</span></span><br><span class="line">err = protobuf.RegisterHelloServiceHandlerFromEndpoint(ctx, mux, endPoint, opts)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;Register handler err:%v\n&quot;</span>, err)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">fmt.Printf(<span class="string">&quot;HTTP Listen on 8080\n&quot;</span>)</span><br><span class="line">http.ListenAndServe(<span class="string">&quot;:8080&quot;</span>, mux)</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+
+
+<h4 id="4-启动HTTP服务和gRPC服务端"><a href="#4-启动HTTP服务和gRPC服务端" class="headerlink" title="4.启动HTTP服务和gRPC服务端"></a>4.启动HTTP服务和gRPC服务端</h4><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line"><span class="meta">&gt;</span><span class="bash"> curl -X POST -d <span class="string">&#x27;&#123;&quot;massage&quot;:&quot;grpc gateway&quot;&#125;&#x27;</span> http://127.0.0.1:8080/hello</span></span><br><span class="line"><span class="meta">&gt;</span><span class="bash"> &#123;<span class="string">&quot;massage&quot;</span>:<span class="string">&quot;hello grpc gateway !&quot;</span>&#125;</span></span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="升级gRPC服务端"><a href="#升级gRPC服务端" class="headerlink" title="升级gRPC服务端"></a>升级gRPC服务端</h3><p>上面方法通过新开启一个HTTP服务实现了通过http请求转换成gRPC客户端请求发送服务端。这样我们是同时开启HTTP和gRPC两个服务，虽然解决了了重复工作的问题，但我们还是得维护两个服务，也不太合适，我们可以将这两个服务整合在一起，共用同一端口号。同时提供http和gRPC两种调用方式。</p>
+<h4 id="1-修改gRPC服务端代码"><a href="#1-修改gRPC服务端代码" class="headerlink" title="1.修改gRPC服务端代码"></a>1.修改gRPC服务端代码</h4><p>只需要修改gRPC服务端代码，将之前的gRPC服务端加上http网关相关，代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">	endPoint := <span class="string">&quot;localhost:9000&quot;</span></span><br><span class="line">	listen, err := net.Listen(<span class="string">&quot;tcp&quot;</span>, endPoint)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;tcp listen err:%v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// rpc server</span></span><br><span class="line">	opts := <span class="built_in">make</span>([]grpc.ServerOption, <span class="number">0</span>)</span><br><span class="line">	creds, err := credentials.NewServerTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;./keys/server.key&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// TLS认证</span></span><br><span class="line">	opts = <span class="built_in">append</span>(opts, grpc.Creds(creds))</span><br><span class="line">	<span class="comment">// 自定义认证</span></span><br><span class="line">	opts = <span class="built_in">append</span>(opts, grpc.UnaryInterceptor(interceptor.Interceptor))</span><br><span class="line">	server := grpc.NewServer(opts...)</span><br><span class="line">	protobuf.RegisterHelloServiceServer(server, &amp;service.HelloService)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">	<span class="comment">// http gateway server</span></span><br><span class="line">	gwOpts := <span class="built_in">make</span>([]grpc.DialOption, <span class="number">0</span>)</span><br><span class="line">	gwCreds, err := credentials.NewClientTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;www.zhouxuwen.com&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// tls认证</span></span><br><span class="line">	gwOpts = <span class="built_in">append</span>(gwOpts, grpc.WithTransportCredentials(gwCreds))</span><br><span class="line">	<span class="comment">// 自定义认证方式</span></span><br><span class="line">	gwOpts = <span class="built_in">append</span>(gwOpts, grpc.WithPerRPCCredentials(&amp;interceptor.AuthCredential))</span><br><span class="line">	<span class="comment">// 请求拦截</span></span><br><span class="line">	gwOpts = <span class="built_in">append</span>(gwOpts, grpc.WithUnaryInterceptor(interceptor.ClientInterceptor))</span><br><span class="line"></span><br><span class="line">	gwmux := runtime.NewServeMux()</span><br><span class="line">	err = protobuf.RegisterHelloServiceHandlerFromEndpoint(context.Background(), gwmux, endPoint, gwOpts)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;register http gateway server fail. err: %v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"></span><br><span class="line">	<span class="comment">// http server</span></span><br><span class="line">	mux := http.NewServeMux()</span><br><span class="line">	mux.Handle(<span class="string">&quot;/&quot;</span>, gwmux)</span><br><span class="line">	tlsConfig, err := getTLSConfig()</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;get tls config err :%v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">// http and gRPC server</span></span><br><span class="line">	srv := &amp;http.Server&#123;</span><br><span class="line">		Addr:      endPoint,</span><br><span class="line">		Handler:   grpcHandlerFunc(server, mux),</span><br><span class="line">		TLSConfig: tlsConfig,</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	fmt.Printf(<span class="string">&quot;gRPC and http listen at :%v\n&quot;</span>, endPoint)</span><br><span class="line">	err = srv.Serve(tls.NewListener(listen, tlsConfig))</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;%v\n&quot;</span>, errors.New(fmt.Sprintf(<span class="string">&quot;failed to serve: %v&quot;</span>, err)))</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">getTLSConfig</span><span class="params">()</span> <span class="params">(*tls.Config, error)</span></span> &#123;</span><br><span class="line">	cert, _ := ioutil.ReadFile(<span class="string">&quot;./keys/server.pem&quot;</span>)</span><br><span class="line">	key, _ := ioutil.ReadFile(<span class="string">&quot;./keys/server.key&quot;</span>)</span><br><span class="line">	<span class="keyword">var</span> demoKeyPair *tls.Certificate</span><br><span class="line">	pair, err := tls.X509KeyPair(cert, key)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;TLS KeyPair err: %v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">	&#125;</span><br><span class="line">	demoKeyPair = &amp;pair</span><br><span class="line">	<span class="keyword">return</span> &amp;tls.Config&#123;</span><br><span class="line">		Certificates: []tls.Certificate&#123;*demoKeyPair&#125;,</span><br><span class="line">		NextProtos:   []<span class="keyword">string</span>&#123;http2.NextProtoTLS&#125;, <span class="comment">// HTTP2 TLS支持</span></span><br><span class="line">	&#125;, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">// grpcHandlerFunc returns an http.Handler that delegates to grpcServer on incoming gRPC</span></span><br><span class="line"><span class="comment">// connections or otherHandler otherwise. Copied from cockroachdb.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">grpcHandlerFunc</span><span class="params">(grpcServer *grpc.Server, otherHandler http.Handler)</span> <span class="title">http</span>.<span class="title">Handler</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> otherHandler == <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> http.HandlerFunc(<span class="function"><span class="keyword">func</span><span class="params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;</span><br><span class="line">			grpcServer.ServeHTTP(w, r)</span><br><span class="line">		&#125;)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> http.HandlerFunc(<span class="function"><span class="keyword">func</span><span class="params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;</span><br><span class="line">		<span class="keyword">if</span> r.ProtoMajor == <span class="number">2</span> &amp;&amp; strings.Contains(r.Header.Get(<span class="string">&quot;Content-Type&quot;</span>), <span class="string">&quot;application/grpc&quot;</span>) &#123;</span><br><span class="line">			grpcServer.ServeHTTP(w, r)</span><br><span class="line">		&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">			otherHandler.ServeHTTP(w, r)</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h4 id="2-启动服务"><a href="#2-启动服务" class="headerlink" title="2.启动服务"></a>2.启动服务</h4><p>启动服务，通过gRPC客户端和http请求的方式进行验证。</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line"><span class="meta">&gt;</span><span class="bash"> curl -X POST -k https://127.0.0.1:9000/hello -d <span class="string">&#x27;&#123;&quot;massage&quot;:&quot;grpc and http&quot;&#125;&#x27;</span></span></span><br><span class="line"><span class="meta">&gt;</span><span class="bash"> &#123;<span class="string">&quot;massage&quot;</span>:<span class="string">&quot;hello grpc and http !&quot;</span>&#125;%</span></span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
+
+
+
+]]></content>
+      <categories>
+        <category>gRPC</category>
+      </categories>
+      <tags>
+        <tag>gRPC</tag>
+        <tag>HTTP</tag>
+        <tag>gateway</tag>
+        <tag>grpc-gateway</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>微服务架构系列（一）-服务注册与发现</title>
     <url>/2022/02/18/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E7%8E%B0/</url>
     <content><![CDATA[<blockquote>
@@ -327,11 +234,104 @@
 <h2 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h2><p>​       打算写一个服务架构练练手，尽量功能齐全，集成所有市面上使用广泛的中间件。其实现在已经提出了服务网格（Service Mesh，已经有机会也会写写），相当于剥离了业务层和管理层，写代码只需要关注业务，无需关心基础设施层。但我为什么还要回过头去写老的服务机构呢？没为什么，就是学习，你写代码的时候也从来没去看过源码，但面试官就是爱问一个道理。</p>
 ]]></content>
       <categories>
-        <category>etcd</category>
-        <category>consul</category>
+        <category>微服务架构</category>
       </categories>
       <tags>
-        <tag>微服务架构</tag>
+        <tag>etcd</tag>
+        <tag>consul</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>RPC序列（三）-gRPC安全认证</title>
+    <url>/2021/07/15/RPC%E5%BA%8F%E5%88%97%EF%BC%88%E4%B8%89%EF%BC%89-gRPC%E5%AE%89%E5%85%A8%E8%AE%A4%E8%AF%81/</url>
+    <content><![CDATA[<blockquote>
+<p>未认证的RPC服务可能导致服务被攻击、注入恶意数据、数据泄露等安全问题。gRPC框架自带的两种安全认证方式，这里简单介绍这两种认证方式，并用Golang进行简单实现。</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="认证"><a href="#认证" class="headerlink" title="认证"></a>认证</h2><p>gRPC内置两种认证方式：</p>
+<ul>
+<li>SSL/TLS认证方式</li>
+<li>自定义认证方式</li>
+</ul>
+<h3 id="SSL-TLS认证"><a href="#SSL-TLS认证" class="headerlink" title="SSL/TLS认证"></a>SSL/TLS认证</h3><p>什么是SSL/TLS呢？SSL是安全套接字层(secure sockets layer),TLS是传输层安全 (transport layer security)，就是在应用层和TCP层之间新加一层加密，这样可以保证信息传输的安全性。</p>
+<h4 id="制作TLS证书"><a href="#制作TLS证书" class="headerlink" title="制作TLS证书"></a>制作TLS证书</h4><p>通过OpenSSL工具生成私钥，加密方式RSA，密码大小2048位。</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">$ openssl genrsa -out server.key 2048</span><br></pre></td></tr></table></figure>
+
+<p>使用私钥生成自签名的证书文件</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">openssl req -new -x509 -sha256 -key server.key -out server.pem -days 3650</span><br></pre></td></tr></table></figure>
+
+<p>填入证书自定义信息，注意<code>server name </code>填写的内容，后面会用到。</p>
+<h4 id="示例项目"><a href="#示例项目" class="headerlink" title="示例项目"></a>示例项目</h4><h5 id="First-server添加TLS认证"><a href="#First-server添加TLS认证" class="headerlink" title="First: server添加TLS认证"></a>First: server添加TLS认证</h5><p>通过密钥和刚刚制作的证书生成服务端传输证书。部分代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// TLS认证</span></span><br><span class="line">creds, err := credentials.NewServerTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;./keys/server.key&quot;</span> <span class="comment">/*制作证书存放路径*/</span>)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line">server := grpc.NewServer(grpc.Creds(creds))</span><br></pre></td></tr></table></figure>
+
+<h5 id="Second-client添加TLS认证"><a href="#Second-client添加TLS认证" class="headerlink" title="Second: client添加TLS认证"></a>Second: client添加TLS认证</h5><p>通过制作的证书生成客户端传输证书。部分代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// TLS认证</span></span><br><span class="line">creds, err := credentials.NewClientTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;server name&quot;</span> <span class="comment">/*制作证书时的server name*/</span>)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line">conn, err := grpc.Dial(<span class="string">&quot;localhost:9000&quot;</span>, grpc.WithTransportCredentials(creds))</span><br></pre></td></tr></table></figure>
+
+<p>到这里gRPC的TLS单向认证的简单实现就完成了。</p>
+<h3 id="自定义Token认证"><a href="#自定义Token认证" class="headerlink" title="自定义Token认证"></a>自定义Token认证</h3><p>通过自定义的身份认证方式进行认证客户端是否有权限。简单理解就是处理请求前对请求的内容进行身份认证。</p>
+<h4 id="示例项目-1"><a href="#示例项目-1" class="headerlink" title="示例项目"></a>示例项目</h4><h5 id="First-server添加鉴权拦截器"><a href="#First-server添加鉴权拦截器" class="headerlink" title="First: server添加鉴权拦截器"></a>First: server添加鉴权拦截器</h5><p>新增鉴权拦截器，示例代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Interceptor</span><span class="params">(ctx context.Context, req <span class="keyword">interface</span>&#123;&#125;, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">	err := Auth(ctx)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 继续处理请求</span></span><br><span class="line">	<span class="keyword">return</span> handler(ctx, req)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Auth</span><span class="params">(ctx context.Context)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	md, ok := metadata.FromIncomingContext(ctx)</span><br><span class="line">	<span class="keyword">if</span> !ok &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;无Token认证信息&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// authentication</span></span><br><span class="line">	val := md.Get(<span class="string">&quot;app_id&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(val) &lt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;app_id is empty&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	appID := val[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">	val = md.Get(<span class="string">&quot;secret_key&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(val) &lt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;secret_key is empty&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	appKey := val[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 简单模拟鉴权方式</span></span><br><span class="line">	<span class="keyword">if</span> _, ok := tokenMap[appID]; !ok || appKey != tokenMap[appID] &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;unauthorized&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>将鉴权拦截器加入服务选项，代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// token auth</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.UnaryInterceptor(interceptor.Interceptor))</span><br><span class="line"></span><br><span class="line"><span class="comment">// rpc server</span></span><br><span class="line">server := grpc.NewServer(opts...)</span><br></pre></td></tr></table></figure>
+
+
+
+<h5 id="second-client添加身份认证请求参数"><a href="#second-client添加身份认证请求参数" class="headerlink" title="second: client添加身份认证请求参数"></a>second: client添加身份认证请求参数</h5><h6 id="方式一：实现PerRPCCredentials接口"><a href="#方式一：实现PerRPCCredentials接口" class="headerlink" title="方式一：实现PerRPCCredentials接口"></a>方式一：实现PerRPCCredentials接口</h6><p>该接口有两个方法</p>
+<ol>
+<li><code>GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) </code> 返回请求的身份认证数据。</li>
+<li><code>RequireTransportSecurity() bool </code>返回是否开启TLS认证</li>
+</ol>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">type</span> authCredential <span class="keyword">struct</span>&#123;&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(*authCredential)</span> <span class="title">GetRequestMetadata</span><span class="params">(ctx context.Context, uri ...<span class="keyword">string</span>)</span> <span class="params">(<span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>, error)</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>&#123;<span class="string">&quot;app_id&quot;</span>:<span class="string">&quot;123456&quot;</span>,<span class="string">&quot;secret_key&quot;</span>:<span class="string">&quot;key&quot;</span>&#125;, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(*authCredential)</span> 	<span class="title">RequireTransportSecurity</span><span class="params">()</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>然后将该自定义认证加入到客户端选项中：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 自定义认证方式</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.WithPerRPCCredentials(<span class="built_in">new</span>(authCredential)))</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+
+
+<h6 id="方式二：context添加元数据"><a href="#方式二：context添加元数据" class="headerlink" title="方式二：context添加元数据"></a>方式二：context添加元数据</h6><p>请求方法的context添加身份认证元数据。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 认证参数</span></span><br><span class="line">md := metadata.Pairs(<span class="string">&quot;app_id&quot;</span>, <span class="string">&quot;123456&quot;</span>, <span class="string">&quot;secret_key&quot;</span>, <span class="string">&quot;secret_key&quot;</span>)</span><br><span class="line">ctx := metadata.NewOutgoingContext(context.Background(), md)</span><br><span class="line"></span><br><span class="line"><span class="comment">// todo </span></span><br><span class="line"><span class="comment">// resp := client.Function(ctx, reqMsg...)</span></span><br></pre></td></tr></table></figure>
+
+<p>到这自定义身份认证的简单实现就完成了。</p>
+<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+]]></content>
+      <categories>
+        <category>gRPC</category>
+      </categories>
+      <tags>
+        <tag>RPC</tag>
+        <tag>gRPC</tag>
+        <tag>SSL/TLS</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>RPC系列（一）-RPC与RUST比较</title>
+    <url>/2021/07/06/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-RPC%E4%B8%8ERUST%E6%AF%94%E8%BE%83/</url>
+    <content><![CDATA[<blockquote>
+<p>本篇文章主要介绍RPC是什么，RPC的具体过程，RPC和RUST的比较以及如何选择。</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="RPC是什么"><a href="#RPC是什么" class="headerlink" title="RPC是什么"></a>RPC是什么</h2><p>RPC(Remote Procedure Call)是远程过程调用的简称。主要目的就是一个应用调用另一个应用的方法，调用方通过调用代理方法的形式调用被调用方的实现方法。调用协议常包括通信协议和序列化协议。底层的通信协议可以是HTTP、TCP等，根据不同的RPC框架而定。序列化协议常用ProtoBuf协议。</p>
+<h2 id="RPC具体过程"><a href="#RPC具体过程" class="headerlink" title="RPC具体过程"></a>RPC具体过程</h2><p><img src="/images/rpc%E5%85%B7%E4%BD%93%E6%B5%81%E7%A8%8B.png" alt="rpc具体流程"></p>
+<h2 id="RPC和RUST比较"><a href="#RPC和RUST比较" class="headerlink" title="RPC和RUST比较"></a>RPC和RUST比较</h2><p>RUST是基于HTTP协议的RESTFul API设计风格的通信方式，也常用于应用之间的信息通信。但设计理念和底层原理是完全不同的。</p>
+<p>HTTP+Rustful的优点是可读性好，支持跨语言。在运用之间通信的使用超越RPC。但缺点也很明显，HTTP是第七层协议，报文包含大量头部信息，有用信息占比少，因此效率和速度较低。另外使用HTTP协议调用接口封装封装，常需要封装很多参数以及校验方法。RPC则更好与其互补，但牺牲可读性来通过效率和性能是可取的。具体怎么选，需根据业务来，灵活站位。</p>
+<h2 id="RPC使用场景"><a href="#RPC使用场景" class="headerlink" title="RPC使用场景"></a>RPC使用场景</h2><p>Rustful常用于与第三方系统之间的信息通信，通过对外调用的接口。</p>
+<p>RPC常用于自家系统之间的互相调用，更安全高效。</p>
+]]></content>
+      <categories>
+        <category>RPC</category>
+      </categories>
+      <tags>
+        <tag>RPC</tag>
+        <tag>RUST</tag>
+        <tag>Rustful</tag>
       </tags>
   </entry>
 </search>
