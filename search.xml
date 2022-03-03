@@ -1,90 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
-    <title>Golang性能优化篇</title>
-    <url>/2022/02/11/Golang%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%AF%87/</url>
-    <content><![CDATA[<blockquote>
-<p>在编写代码时常使用且常忽视的性能问题进行总结。这篇文章将持续更新…</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="string-和-byte-相互转换"><a href="#string-和-byte-相互转换" class="headerlink" title="string 和 []byte 相互转换"></a>string 和 []byte 相互转换</h2><p>无论是从哪种类型转换到另一种都需要对其中的内容进行拷贝，string 和 []byte 相互转换 也不例外，内存拷贝的性能损耗会随着字符串数组和字节长度的增长而增长，所以在做这种类型转换时一定要注意性能上的问题。</p>
-<p>接下来我们可以使用一些方法来避免这种大批量的拷贝工作，这个方法就是可以绕过类型检查的 unsafe.Pointer</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">str2bytes</span><span class="params">(s <span class="keyword">string</span>)</span> []<span class="title">byte</span></span> &#123;</span><br><span class="line">   x := (*[<span class="number">2</span>]<span class="keyword">uintptr</span>)(unsafe.Pointer(&amp;s))</span><br><span class="line">   b := [<span class="number">3</span>]<span class="keyword">uintptr</span>&#123;x[<span class="number">0</span>], x[<span class="number">1</span>], x[<span class="number">1</span>]&#125;</span><br><span class="line">   <span class="keyword">return</span> *(*[]<span class="keyword">byte</span>)(unsafe.Pointer(&amp;b))</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">bytes2str</span><span class="params">(b []<span class="keyword">byte</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">   <span class="keyword">return</span> *(*<span class="keyword">string</span>)(unsafe.Pointer(&amp;b))</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    </p>
-<h2 id="字符串连接"><a href="#字符串连接" class="headerlink" title="字符串连接"></a>字符串连接</h2><p>字符串连接有很多方法：</p>
-<ol>
-<li>直接通过运算符<code>+</code></li>
-<li>fmt.Sprintf()</li>
-<li>bytes.Buffer{}</li>
-</ol>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Buffer</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	buffer := bytes.Buffer&#123;&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(s)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	buffer.Grow(n)</span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		buffer.WriteString(s)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> buffer.String()</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-
-<ol start="4">
-<li>strings.Builder{}</li>
-</ol>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Builder</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	builder := strings.Builder&#123;&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(s)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	builder.Grow(n)</span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		builder.WriteString(s)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> builder.String()</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-
-<ol start="5">
-<li>copy方法</li>
-</ol>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Copy</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	<span class="keyword">switch</span> <span class="built_in">len</span>(str) &#123;</span><br><span class="line">	<span class="keyword">case</span> <span class="number">0</span>:</span><br><span class="line">		<span class="keyword">return</span> <span class="string">&quot;&quot;</span></span><br><span class="line">	<span class="keyword">case</span> <span class="number">1</span>:</span><br><span class="line">		<span class="keyword">return</span> str[<span class="number">0</span>]</span><br><span class="line">	&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(Str2Bytes(s))</span><br><span class="line">	&#125;</span><br><span class="line">	bytes := <span class="built_in">make</span>([]<span class="keyword">byte</span>, n)</span><br><span class="line">	c := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		c += <span class="built_in">copy</span>(bytes[c:], Str2Bytes(s))</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> Bytes2Str(bytes)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<p>既然方法有这么多种，性能问题就会有差异，通过benchmark测试查看一下:</p>
-<p><img src="/images/benchmark-2022021101.png" alt="benchmark-2022021101"></p>
-<p>可以看出copy和strings.Builder性能上是最好的，fmt.Sprintf是最差的，为什么呢？要知道golang 里面的字符串都是不可变的，每次运算都会产生一个新的字符串，所以会产生很多临时的无用的字符串，不仅没有用，还会给 gc 带来额外的负担，所以性能变差。而copy和strings.Builder根据长度预先分配内存，没有产生很多临时的无用的字符串。本质上就是以空间换时间。</p>
-<h2 id="json序列化"><a href="#json序列化" class="headerlink" title="json序列化"></a>json序列化</h2><p>json系列我们最常用的就是标准库里的encoding/json，但为提高性能可以使用一些第三方库替换。如json-iterator、easyjson等。</p>
-<p>性能提升多少呢？我们通过banchmark测试看一下:</p>
-<p><img src="/images/benchmark-2022021102.png" alt="benchmark-2022021101"></p>
-<p>可以看到json-iterator和easyjson相比easyjson提升整整一倍。但第三方库有一定的维护成本，但数据量大的时候，使用第三方库也是值得的。</p>
-]]></content>
-      <categories>
-        <category>Golang</category>
-      </categories>
-      <tags>
-        <tag>Golang</tag>
-        <tag>json</tag>
-        <tag>string</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Golang系列（一）-context使用</title>
-    <url>/2021/07/12/Golang%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-context/</url>
-    <content><![CDATA[<blockquote>
-<p>go的context包详解，context中文翻译过来叫“上下文”，本篇文章讲一下它具体的作用是什么。你在什么情况下可以用到它。</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="引言"><a href="#引言" class="headerlink" title="引言"></a>引言</h2><p>http server 常为每个请求创建一个 goroutine 以并发地处理请求，同时这个 goroutine 又会创建更多的 gotoutine 来访问数据库和缓存或RPC服务，当请求结束或被终止，能释放所有 gotoutine的资源。因此就需要一种机制，在goroutine之间传递信号消息。</p>
-<h2 id="简介"><a href="#简介" class="headerlink" title="简介"></a>简介</h2><p>context 中文翻译过来叫”上下文“，常被用来 goroutine 之间传递信息和信号的。信息和信号包括截至时间（deadline)，取消信号(cancellation signals) 以及跨边界需要往下传递的键值对信息。</p>
-<h2 id="特性"><a href="#特性" class="headerlink" title="特性"></a>特性</h2><ul>
-<li>context的设计是可通过已有Context进行树型派生，已管理一组过程的生命周期。单Context是不可变的，但可以通过WithValue、WithCancel、WithTimeout方法进行派生并附加一些属性（键值、可取消、时限），以构建一组树型组织的context。</li>
-<li>当根 Context 结束时，所有由其派生出的 Context 也会被一并取消。也就是说，父 Context 的生命周期涵盖所有子 Context 的生命周期。</li>
-</ul>
-<h2 id="使用"><a href="#使用" class="headerlink" title="使用"></a>使用</h2><h3 id="创建根Context"><a href="#创建根Context" class="headerlink" title="创建根Context"></a>创建根Context</h3><p><code>context.Background() </code>创建一个空的Context（not nil), 常用作初始化创建根Context。</p>
-<h3 id="派生携带键值信息Context"><a href="#派生携带键值信息Context" class="headerlink" title="派生携带键值信息Context"></a>派生携带键值信息Context</h3><p><code>context.WithValue(parentContext, key, value)</code> 在父节点Context的基础上创建一个新的携带键值信息的的子节点Context。</p>
-<h3 id="派生可取消Context"><a href="#派生可取消Context" class="headerlink" title="派生可取消Context"></a>派生可取消Context</h3><p><code>context.WithCancel(parentContext) </code>在父节点Context的基础上创建一个新的可取消的子节点Context，返回新创建的子节点Context和取消方法cancelFunc。</p>
-<h3 id="派生有时间限制Context"><a href="#派生有时间限制Context" class="headerlink" title="派生有时间限制Context"></a>派生有时间限制Context</h3><p><code>context.WithTimeout(parentContext，timeout)</code>在父节点Context的基础上创建新的有时间限制的子节点Context，返回新创建子节点Context和取消方法cancelFunc。超过时间限制后，该Conext会发送信号到Done通道，所有子节点检测到信号立即退出。</p>
-<h3 id="派生有截至时间Context"><a href="#派生有截至时间Context" class="headerlink" title="派生有截至时间Context"></a>派生有截至时间Context</h3><p><code>context.WithDeadline(parentContext, time)</code>在父节点Context的基础上创建新的有截至时间的子节点Context,返回新创建子节点Context和取消方法cancelFunc。<code>context.Timeout(parentContext，timeout)</code>等价于<code>context.Deadline(parentContext,time.Now().Add(timeout))</code>。</p>
-<p>​    </p>
-<h2 id="注意"><a href="#注意" class="headerlink" title="注意"></a>注意</h2><ul>
-<li>Background 创建的根节点没有时限，也不能取消。</li>
-<li>WithCancel、WithTimeout、WithDeadline方法是从父context派生出新的context，新的context受限与父context的生命周期。新context应注意在对应过程结束后及时cancel，以防止goroutine泄露。</li>
-<li>不能使用nil Context，尽管语法上允许。不知道使用什么值合适时，可以使用 <code>context.TODO()</code>。</li>
-</ul>
-]]></content>
-      <categories>
-        <category>Golang</category>
-      </categories>
-      <tags>
-        <tag>Golang</tag>
-        <tag>context</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>RPC系列（一）-RPC与RUST比较</title>
     <url>/2021/07/06/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-RPC%E4%B8%8ERUST%E6%AF%94%E8%BE%83/</url>
     <content><![CDATA[<blockquote>
@@ -106,68 +22,6 @@
         <tag>RPC</tag>
         <tag>RUST</tag>
         <tag>Rustful</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>RPC系列（四）-HTTP网关</title>
-    <url>/2021/07/17/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E5%9B%9B%EF%BC%89-HTTP%E7%BD%91%E5%85%B3/</url>
-    <content><![CDATA[<blockquote>
-<p>gPRC网关是通过接收HTTP请求进行转换成gRPC的客户端请求发送给服务端的过程。这里介绍gRPC中HTTP网关的具体实现以及代码实现。</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="HTTP网关"><a href="#HTTP网关" class="headerlink" title="HTTP网关"></a>HTTP网关</h2><p>​        有时同一套业务代码我们既需要gRPC服务又需要HTTP服务，写两个服务又有点重复工作，而且维护两个版本的服务显然又不太合理，于是GRPC网关（grpc-gateway）就诞生了。它是通过protobuf的自定义option实现了一个网关，服务可以开启HTTP服务来接收HTTP请求，通过将请求数据转换成gRPC客户端请求发送个gRPC服务端，服务又将gRPC服务端的响应转化成HTTP响应返回给请求方。</p>
-<h2 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h2><p>安装grpc-gateway, 这样protobuf就能生成gRPC网关相关代码</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">go get -u github.com&#x2F;grpc-ecosystem&#x2F;grpc-gateway&#x2F;protoc-gen-grpc-gateway</span><br></pre></td></tr></table></figure>
-
-
-
-
-
-<h2 id="示例"><a href="#示例" class="headerlink" title="示例"></a>示例</h2><h3 id="HTTP服务"><a href="#HTTP服务" class="headerlink" title="HTTP服务"></a>HTTP服务</h3><p>通过开启一个HTTP服务来接收http请求，通过将请求数据转换成gRPC客户端请求发送个gRPC服务端来实现整个请求过程。</p>
-<h4 id="1-proto文件新增http-option"><a href="#1-proto文件新增http-option" class="headerlink" title="1.proto文件新增http option"></a>1.proto文件新增http option</h4><p>在前几节的massage.proto文件中的Hello方法新增http option, post请求，路由为<code>/hello</code>。</p>
-<figure class="highlight protobuf"><table><tr><td class="code"><pre><span class="line">syntax = <span class="string">&quot;proto3&quot;</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">package</span> protobuf;</span><br><span class="line"><span class="keyword">option</span> go_package = <span class="string">&quot;./;protobuf&quot;</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> <span class="string">&quot;google/api/annotations.proto&quot;</span>;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">service</span> <span class="title">HelloService</span></span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">rpc</span> Hello(Massage) <span class="keyword">returns</span> (Massage) </span>&#123;</span><br><span class="line">      <span class="comment">// http option</span></span><br><span class="line">      <span class="keyword">option</span> (google.api.http) = &#123;</span><br><span class="line">        post: <span class="string">&quot;/hello&quot;</span></span><br><span class="line">        body: <span class="string">&quot;*&quot;</span></span><br><span class="line">      &#125;;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">......</span><br></pre></td></tr></table></figure>
-
-
-
-<h4 id="2-生成gRPC网关相关代码"><a href="#2-生成gRPC网关相关代码" class="headerlink" title="2.生成gRPC网关相关代码"></a>2.生成gRPC网关相关代码</h4><p>通过protoc命令生成gRPC网关相关代码。这里需要引入google api的proto文件。</p>
-<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">protoc --go_out=. -I=. -I$GOPATH/src/github.com/googleapis/googleapis massage.proto</span><br><span class="line"></span><br><span class="line">protoc --go-grpc_out=. -I=. -I$GOPATH/src/github.com/googleapis/googleapis massage.proto</span><br><span class="line"></span><br><span class="line">protoc --grpc-gateway_out=logtostderr=true:. -I=. -I$GOPATH/src/github.com/googleapis/googleapis massage.proto</span><br></pre></td></tr></table></figure>
-
-
-
-<h4 id="3-新增HTTP服务代码"><a href="#3-新增HTTP服务代码" class="headerlink" title="3.新增HTTP服务代码"></a>3.新增HTTP服务代码</h4><p>新增http_server/main.go, 实现http服务，相关认证选项和拦截器选项参考前几章客户端请求选项，这里自演示部分代码。</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">ctx, cancel := context.WithCancel(context.Background())</span><br><span class="line"><span class="keyword">defer</span> cancel()</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">endPoint := <span class="string">&quot;127.0.0.1:9000&quot;</span></span><br><span class="line">mux := runtime.NewServeMux()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 添加客户端请求选项</span></span><br><span class="line">opts := <span class="built_in">make</span>([]grpc.DialOption, <span class="number">0</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// TLS认证（如果开启TLS认证）</span></span><br><span class="line">creds, err := credentials.NewClientTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;www.zhouxuwen.com&quot;</span>)</span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.WithTransportCredentials(creds))</span><br><span class="line"></span><br><span class="line"><span class="comment">// 自定义认证方式（如果开启自定义认证）</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.WithPerRPCCredentials(<span class="built_in">new</span>(authCredential)))</span><br><span class="line"></span><br><span class="line"><span class="comment">// HTTP转grpc</span></span><br><span class="line">err = protobuf.RegisterHelloServiceHandlerFromEndpoint(ctx, mux, endPoint, opts)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;Register handler err:%v\n&quot;</span>, err)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">fmt.Printf(<span class="string">&quot;HTTP Listen on 8080\n&quot;</span>)</span><br><span class="line">http.ListenAndServe(<span class="string">&quot;:8080&quot;</span>, mux)</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-
-
-
-<h4 id="4-启动HTTP服务和gRPC服务端"><a href="#4-启动HTTP服务和gRPC服务端" class="headerlink" title="4.启动HTTP服务和gRPC服务端"></a>4.启动HTTP服务和gRPC服务端</h4><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line"><span class="meta">&gt;</span><span class="bash"> curl -X POST -d <span class="string">&#x27;&#123;&quot;massage&quot;:&quot;grpc gateway&quot;&#125;&#x27;</span> http://127.0.0.1:8080/hello</span></span><br><span class="line"><span class="meta">&gt;</span><span class="bash"> &#123;<span class="string">&quot;massage&quot;</span>:<span class="string">&quot;hello grpc gateway !&quot;</span>&#125;</span></span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="升级gRPC服务端"><a href="#升级gRPC服务端" class="headerlink" title="升级gRPC服务端"></a>升级gRPC服务端</h3><p>上面方法通过新开启一个HTTP服务实现了通过http请求转换成gRPC客户端请求发送服务端。这样我们是同时开启HTTP和gRPC两个服务，虽然解决了了重复工作的问题，但我们还是得维护两个服务，也不太合适，我们可以将这两个服务整合在一起，共用同一端口号。同时提供http和gRPC两种调用方式。</p>
-<h4 id="1-修改gRPC服务端代码"><a href="#1-修改gRPC服务端代码" class="headerlink" title="1.修改gRPC服务端代码"></a>1.修改gRPC服务端代码</h4><p>只需要修改gRPC服务端代码，将之前的gRPC服务端加上http网关相关，代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">	endPoint := <span class="string">&quot;localhost:9000&quot;</span></span><br><span class="line">	listen, err := net.Listen(<span class="string">&quot;tcp&quot;</span>, endPoint)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;tcp listen err:%v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// rpc server</span></span><br><span class="line">	opts := <span class="built_in">make</span>([]grpc.ServerOption, <span class="number">0</span>)</span><br><span class="line">	creds, err := credentials.NewServerTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;./keys/server.key&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// TLS认证</span></span><br><span class="line">	opts = <span class="built_in">append</span>(opts, grpc.Creds(creds))</span><br><span class="line">	<span class="comment">// 自定义认证</span></span><br><span class="line">	opts = <span class="built_in">append</span>(opts, grpc.UnaryInterceptor(interceptor.Interceptor))</span><br><span class="line">	server := grpc.NewServer(opts...)</span><br><span class="line">	protobuf.RegisterHelloServiceServer(server, &amp;service.HelloService)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">	<span class="comment">// http gateway server</span></span><br><span class="line">	gwOpts := <span class="built_in">make</span>([]grpc.DialOption, <span class="number">0</span>)</span><br><span class="line">	gwCreds, err := credentials.NewClientTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;www.zhouxuwen.com&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// tls认证</span></span><br><span class="line">	gwOpts = <span class="built_in">append</span>(gwOpts, grpc.WithTransportCredentials(gwCreds))</span><br><span class="line">	<span class="comment">// 自定义认证方式</span></span><br><span class="line">	gwOpts = <span class="built_in">append</span>(gwOpts, grpc.WithPerRPCCredentials(&amp;interceptor.AuthCredential))</span><br><span class="line">	<span class="comment">// 请求拦截</span></span><br><span class="line">	gwOpts = <span class="built_in">append</span>(gwOpts, grpc.WithUnaryInterceptor(interceptor.ClientInterceptor))</span><br><span class="line"></span><br><span class="line">	gwmux := runtime.NewServeMux()</span><br><span class="line">	err = protobuf.RegisterHelloServiceHandlerFromEndpoint(context.Background(), gwmux, endPoint, gwOpts)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;register http gateway server fail. err: %v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"></span><br><span class="line">	<span class="comment">// http server</span></span><br><span class="line">	mux := http.NewServeMux()</span><br><span class="line">	mux.Handle(<span class="string">&quot;/&quot;</span>, gwmux)</span><br><span class="line">	tlsConfig, err := getTLSConfig()</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;get tls config err :%v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">// http and gRPC server</span></span><br><span class="line">	srv := &amp;http.Server&#123;</span><br><span class="line">		Addr:      endPoint,</span><br><span class="line">		Handler:   grpcHandlerFunc(server, mux),</span><br><span class="line">		TLSConfig: tlsConfig,</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	fmt.Printf(<span class="string">&quot;gRPC and http listen at :%v\n&quot;</span>, endPoint)</span><br><span class="line">	err = srv.Serve(tls.NewListener(listen, tlsConfig))</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;%v\n&quot;</span>, errors.New(fmt.Sprintf(<span class="string">&quot;failed to serve: %v&quot;</span>, err)))</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">getTLSConfig</span><span class="params">()</span> <span class="params">(*tls.Config, error)</span></span> &#123;</span><br><span class="line">	cert, _ := ioutil.ReadFile(<span class="string">&quot;./keys/server.pem&quot;</span>)</span><br><span class="line">	key, _ := ioutil.ReadFile(<span class="string">&quot;./keys/server.key&quot;</span>)</span><br><span class="line">	<span class="keyword">var</span> demoKeyPair *tls.Certificate</span><br><span class="line">	pair, err := tls.X509KeyPair(cert, key)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;TLS KeyPair err: %v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">	&#125;</span><br><span class="line">	demoKeyPair = &amp;pair</span><br><span class="line">	<span class="keyword">return</span> &amp;tls.Config&#123;</span><br><span class="line">		Certificates: []tls.Certificate&#123;*demoKeyPair&#125;,</span><br><span class="line">		NextProtos:   []<span class="keyword">string</span>&#123;http2.NextProtoTLS&#125;, <span class="comment">// HTTP2 TLS支持</span></span><br><span class="line">	&#125;, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">// grpcHandlerFunc returns an http.Handler that delegates to grpcServer on incoming gRPC</span></span><br><span class="line"><span class="comment">// connections or otherHandler otherwise. Copied from cockroachdb.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">grpcHandlerFunc</span><span class="params">(grpcServer *grpc.Server, otherHandler http.Handler)</span> <span class="title">http</span>.<span class="title">Handler</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> otherHandler == <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> http.HandlerFunc(<span class="function"><span class="keyword">func</span><span class="params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;</span><br><span class="line">			grpcServer.ServeHTTP(w, r)</span><br><span class="line">		&#125;)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> http.HandlerFunc(<span class="function"><span class="keyword">func</span><span class="params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;</span><br><span class="line">		<span class="keyword">if</span> r.ProtoMajor == <span class="number">2</span> &amp;&amp; strings.Contains(r.Header.Get(<span class="string">&quot;Content-Type&quot;</span>), <span class="string">&quot;application/grpc&quot;</span>) &#123;</span><br><span class="line">			grpcServer.ServeHTTP(w, r)</span><br><span class="line">		&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">			otherHandler.ServeHTTP(w, r)</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h4 id="2-启动服务"><a href="#2-启动服务" class="headerlink" title="2.启动服务"></a>2.启动服务</h4><p>启动服务，通过gRPC客户端和http请求的方式进行验证。</p>
-<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line"><span class="meta">&gt;</span><span class="bash"> curl -X POST -k https://127.0.0.1:9000/hello -d <span class="string">&#x27;&#123;&quot;massage&quot;:&quot;grpc and http&quot;&#125;&#x27;</span></span></span><br><span class="line"><span class="meta">&gt;</span><span class="bash"> &#123;<span class="string">&quot;massage&quot;</span>:<span class="string">&quot;hello grpc and http !&quot;</span>&#125;%</span></span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
-
-
-
-]]></content>
-      <categories>
-        <category>gRPC</category>
-      </categories>
-      <tags>
-        <tag>gRPC</tag>
-        <tag>HTTP</tag>
-        <tag>gateway</tag>
-        <tag>grpc-gateway</tag>
       </tags>
   </entry>
   <entry>
@@ -230,90 +84,60 @@
         <category>gRPC</category>
       </categories>
       <tags>
-        <tag>Golang</tag>
         <tag>RPC</tag>
         <tag>gRPC</tag>
         <tag>ProtoBuf</tag>
+        <tag>Golang</tag>
       </tags>
   </entry>
   <entry>
-    <title>微服务架构系列（一）-服务注册与发现</title>
-    <url>/2022/02/18/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E7%8E%B0/</url>
+    <title>Golang性能优化篇</title>
+    <url>/2022/02/11/Golang%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%AF%87/</url>
     <content><![CDATA[<blockquote>
-<p>为什么有服务注册与发现？解决了什么问题？如何使用？</p>
+<p>在编写代码时常使用且常忽视的性能问题进行总结。这篇文章将持续更新…</p>
 </blockquote>
 <a id="more"></a>
 
+<h2 id="string-和-byte-相互转换"><a href="#string-和-byte-相互转换" class="headerlink" title="string 和 []byte 相互转换"></a>string 和 []byte 相互转换</h2><p>无论是从哪种类型转换到另一种都需要对其中的内容进行拷贝，string 和 []byte 相互转换 也不例外，内存拷贝的性能损耗会随着字符串数组和字节长度的增长而增长，所以在做这种类型转换时一定要注意性能上的问题。</p>
+<p>接下来我们可以使用一些方法来避免这种大批量的拷贝工作，这个方法就是可以绕过类型检查的 unsafe.Pointer</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">str2bytes</span><span class="params">(s <span class="keyword">string</span>)</span> []<span class="title">byte</span></span> &#123;</span><br><span class="line">   x := (*[<span class="number">2</span>]<span class="keyword">uintptr</span>)(unsafe.Pointer(&amp;s))</span><br><span class="line">   b := [<span class="number">3</span>]<span class="keyword">uintptr</span>&#123;x[<span class="number">0</span>], x[<span class="number">1</span>], x[<span class="number">1</span>]&#125;</span><br><span class="line">   <span class="keyword">return</span> *(*[]<span class="keyword">byte</span>)(unsafe.Pointer(&amp;b))</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">bytes2str</span><span class="params">(b []<span class="keyword">byte</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">   <span class="keyword">return</span> *(*<span class="keyword">string</span>)(unsafe.Pointer(&amp;b))</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
-
-<h2 id="为什么有服务注册与发现？解决了什么问题？"><a href="#为什么有服务注册与发现？解决了什么问题？" class="headerlink" title="为什么有服务注册与发现？解决了什么问题？"></a>为什么有服务注册与发现？解决了什么问题？</h2><p>​       服务根据功能进行了划分，各自负责自己的模块；但服务和服务之间还需要通信，服务部署很多台，我们要从中获取一台服务建立通信；如果没有服务注册和发现中间件我们要怎么做呢？大部分的做法可能是将所有服务的地址权重写在配置中，通过类负载均衡算法从中选择一个建立连接到达通信的目的，这么做是没问题的，但这么做方便吗？不方便。首先每次新增或移除一个服务都要更新配置文件，而且这类操作通常会比较频繁。其次如果是用容器部署的话，服务的地址都动态服务，如果还是通过人工进行配置，那对运维一点都不友好。服务注册与发现中间件是什么呢？它其实就是公共的服务，保存服务的注册信息，且必须具备高可用和一致性。服务注册时将信息记录，服务发现时获取注册列表。这不就解决了上面所说的问题。</p>
-<h2 id="使用总结为三步："><a href="#使用总结为三步：" class="headerlink" title="使用总结为三步："></a>使用总结为三步：</h2><ol>
-<li><p>服务提供者（Provider）与中间件服务（etcd、consul等）建立连接；</p>
-</li>
-<li><p>服务提供者向中间件服务注册，供其他服务调用；</p>
-</li>
-<li><p>服务消费者（consumer）从中间件服务发现服务（从服务列表中通过负载均衡算法选取）进行调用；</p>
-</li>
-</ol>
-<h2 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h2><p>​       打算写一个服务架构练练手，尽量功能齐全，集成所有市面上使用广泛的中间件。其实现在已经提出了服务网格（Service Mesh，已经有机会也会写写），相当于剥离了业务层和管理层，写代码只需要关注业务，无需关心基础设施层。但我为什么还要回过头去写老的服务机构呢？没为什么，就是学习，你写代码的时候也从来没去看过源码，但面试官就是爱问一个道理。</p>
-]]></content>
-      <categories>
-        <category>微服务架构</category>
-      </categories>
-      <tags>
-        <tag>etcd</tag>
-        <tag>consul</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>微服务架构系列（一）-服务注册与发现（2）</title>
-    <url>/2022/03/03/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E7%8E%B0%EF%BC%882%EF%BC%89/</url>
-    <content><![CDATA[<blockquote>
-<p>服务注册与发现之go语言设计与实现，为什么需要租约模式？watch机制解决了什么问题？</p>
-</blockquote>
-<a id="more"></a>
-
-
-
-<h2 id="1-定义接口"><a href="#1-定义接口" class="headerlink" title="1.定义接口"></a>1.定义接口</h2><p>首先确认整个流程需要做的事情；</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">1. 创建注册表对象,建立连接;</span><br><span class="line">2. 服务注册到注册表,定期续租;</span><br><span class="line">3. 服务从注册表中注销;</span><br><span class="line">4. 从注册表中获取服务列表;</span><br><span class="line">5. 监听key,当key变化时更新服务列表;</span><br></pre></td></tr></table></figure>
-
-<p>从这些需要做的事情可以抽象出三个角色注册者（Registrar）、发现者（Discovery）、观察者（Watcher）以及方法。伪代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">type</span> Registrar <span class="keyword">interface</span> &#123;</span><br><span class="line">  Register()</span><br><span class="line">  DeRegister()</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Discovery <span class="keyword">interface</span> &#123; </span><br><span class="line">  Discover() []*Service</span><br><span class="line">  Watch(key <span class="keyword">string</span>) *Watcher</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Watcher <span class="keyword">interface</span> &#123;</span><br><span class="line">  Naxt() []*Service</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h2 id="2-实现接口"><a href="#2-实现接口" class="headerlink" title="2.实现接口"></a>2.实现接口</h2><h3 id="Consul"><a href="#Consul" class="headerlink" title="Consul"></a>Consul</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/consul/v2</span><br></pre></td></tr></table></figure>
-
-<h3 id="Etcd"><a href="#Etcd" class="headerlink" title="Etcd"></a>Etcd</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/etcd/v2</span><br></pre></td></tr></table></figure>
-
-<h3 id="zookeeper"><a href="#zookeeper" class="headerlink" title="zookeeper"></a>zookeeper</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/zookeeper/v2</span><br></pre></td></tr></table></figure>
-
-<h3 id="Nacos"><a href="#Nacos" class="headerlink" title="Nacos"></a>Nacos</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/nacos/v2</span><br></pre></td></tr></table></figure>
-
-<h3 id="kubernetes"><a href="#kubernetes" class="headerlink" title="kubernetes"></a>kubernetes</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/kubernetes/v2</span><br></pre></td></tr></table></figure>
-
-<h3 id="polaris"><a href="#polaris" class="headerlink" title="polaris"></a>polaris</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/polaris/v2</span><br></pre></td></tr></table></figure>
-
-
-
-<h2 id="3-问题"><a href="#3-问题" class="headerlink" title="3.问题"></a>3.问题</h2><h3 id="为什么需要租约模式？定期续租是为了什么？"><a href="#为什么需要租约模式？定期续租是为了什么？" class="headerlink" title="为什么需要租约模式？定期续租是为了什么？"></a>为什么需要租约模式？定期续租是为了什么？</h3><p>服务注册到注册表中，如果服务挂了，不从注册表中移除，它还会在注册表中，请求就可能进入异常服务中，这并不是我们想要的结果。于是便有了租约模式，服务需要定期发送续租请求，在指定时间（keepalive）内未发送请求，就认为服务处于异常状态，将被从注册表中移除。</p>
-<h3 id="watch机制是解决什么问题？"><a href="#watch机制是解决什么问题？" class="headerlink" title="watch机制是解决什么问题？"></a>watch机制是解决什么问题？</h3><p>服务发现是从注册表中发现一组服务列表，服务列表并未更新，我们还是需要主动从注册表中获取服务列表，在我们看来服务列表未更新，这种操作是没必要的，为了避免这种反复轮询，便有了watch机制，从主动变成了被动，我们对key进行监听，如果key的value更新了，便进行通知，我们才去获取服务列表进行更新。</p>
-<h2 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h2><p>虽然服务注册与发现的基础使用是有了，但实际使用下来会有以下两个问题：</p>
+<p>​    </p>
+<h2 id="字符串连接"><a href="#字符串连接" class="headerlink" title="字符串连接"></a>字符串连接</h2><p>字符串连接有很多方法：</p>
 <ol>
-<li><p>服务发现获取到是服务列表，从中选择一个涉及负载均衡算法</p>
-</li>
-<li><p>服务发现获取的是服务连接信息，其中可能是http服务，可能是grpc服务，不能很好的使用；</p>
-</li>
+<li>直接通过运算符<code>+</code></li>
+<li>fmt.Sprintf()</li>
+<li>bytes.Buffer{}</li>
 </ol>
-<p>从这两个问题我们可以抽象几个角色选择器（Selecter）、均衡器（Banlancer）、解析器（Reslover）等。下一篇从这两个问题出发介绍这几个角色的实现。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Buffer</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	buffer := bytes.Buffer&#123;&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(s)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	buffer.Grow(n)</span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		buffer.WriteString(s)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> buffer.String()</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<ol start="4">
+<li>strings.Builder{}</li>
+</ol>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Builder</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	builder := strings.Builder&#123;&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(s)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	builder.Grow(n)</span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		builder.WriteString(s)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> builder.String()</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<ol start="5">
+<li>copy方法</li>
+</ol>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Copy</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	<span class="keyword">switch</span> <span class="built_in">len</span>(str) &#123;</span><br><span class="line">	<span class="keyword">case</span> <span class="number">0</span>:</span><br><span class="line">		<span class="keyword">return</span> <span class="string">&quot;&quot;</span></span><br><span class="line">	<span class="keyword">case</span> <span class="number">1</span>:</span><br><span class="line">		<span class="keyword">return</span> str[<span class="number">0</span>]</span><br><span class="line">	&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(Str2Bytes(s))</span><br><span class="line">	&#125;</span><br><span class="line">	bytes := <span class="built_in">make</span>([]<span class="keyword">byte</span>, n)</span><br><span class="line">	c := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		c += <span class="built_in">copy</span>(bytes[c:], Str2Bytes(s))</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> Bytes2Str(bytes)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<p>既然方法有这么多种，性能问题就会有差异，通过benchmark测试查看一下:</p>
+<p><img src="/images/benchmark-2022021101.png" alt="benchmark-2022021101"></p>
+<p>可以看出copy和strings.Builder性能上是最好的，fmt.Sprintf是最差的，为什么呢？要知道golang 里面的字符串都是不可变的，每次运算都会产生一个新的字符串，所以会产生很多临时的无用的字符串，不仅没有用，还会给 gc 带来额外的负担，所以性能变差。而copy和strings.Builder根据长度预先分配内存，没有产生很多临时的无用的字符串。本质上就是以空间换时间。</p>
+<h2 id="json序列化"><a href="#json序列化" class="headerlink" title="json序列化"></a>json序列化</h2><p>json系列我们最常用的就是标准库里的encoding/json，但为提高性能可以使用一些第三方库替换。如json-iterator、easyjson等。</p>
+<p>性能提升多少呢？我们通过banchmark测试看一下:</p>
+<p><img src="/images/benchmark-2022021102.png" alt="benchmark-2022021101"></p>
+<p>可以看到json-iterator和easyjson相比easyjson提升整整一倍。但第三方库有一定的维护成本，但数据量大的时候，使用第三方库也是值得的。</p>
 ]]></content>
       <categories>
-        <category>微服务架构</category>
+        <category>Golang</category>
       </categories>
       <tags>
-        <tag>etcd</tag>
-        <tag>consul</tag>
+        <tag>Golang</tag>
+        <tag>json</tag>
+        <tag>string</tag>
       </tags>
   </entry>
   <entry>
@@ -383,6 +207,182 @@
         <tag>RPC</tag>
         <tag>gRPC</tag>
         <tag>SSL/TLS</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>RPC系列（四）-HTTP网关</title>
+    <url>/2021/07/17/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E5%9B%9B%EF%BC%89-HTTP%E7%BD%91%E5%85%B3/</url>
+    <content><![CDATA[<blockquote>
+<p>gPRC网关是通过接收HTTP请求进行转换成gRPC的客户端请求发送给服务端的过程。这里介绍gRPC中HTTP网关的具体实现以及代码实现。</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="HTTP网关"><a href="#HTTP网关" class="headerlink" title="HTTP网关"></a>HTTP网关</h2><p>​        有时同一套业务代码我们既需要gRPC服务又需要HTTP服务，写两个服务又有点重复工作，而且维护两个版本的服务显然又不太合理，于是GRPC网关（grpc-gateway）就诞生了。它是通过protobuf的自定义option实现了一个网关，服务可以开启HTTP服务来接收HTTP请求，通过将请求数据转换成gRPC客户端请求发送个gRPC服务端，服务又将gRPC服务端的响应转化成HTTP响应返回给请求方。</p>
+<h2 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h2><p>安装grpc-gateway, 这样protobuf就能生成gRPC网关相关代码</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">go get -u github.com&#x2F;grpc-ecosystem&#x2F;grpc-gateway&#x2F;protoc-gen-grpc-gateway</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+<h2 id="示例"><a href="#示例" class="headerlink" title="示例"></a>示例</h2><h3 id="HTTP服务"><a href="#HTTP服务" class="headerlink" title="HTTP服务"></a>HTTP服务</h3><p>通过开启一个HTTP服务来接收http请求，通过将请求数据转换成gRPC客户端请求发送个gRPC服务端来实现整个请求过程。</p>
+<h4 id="1-proto文件新增http-option"><a href="#1-proto文件新增http-option" class="headerlink" title="1.proto文件新增http option"></a>1.proto文件新增http option</h4><p>在前几节的massage.proto文件中的Hello方法新增http option, post请求，路由为<code>/hello</code>。</p>
+<figure class="highlight protobuf"><table><tr><td class="code"><pre><span class="line">syntax = <span class="string">&quot;proto3&quot;</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">package</span> protobuf;</span><br><span class="line"><span class="keyword">option</span> go_package = <span class="string">&quot;./;protobuf&quot;</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> <span class="string">&quot;google/api/annotations.proto&quot;</span>;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">service</span> <span class="title">HelloService</span></span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">rpc</span> Hello(Massage) <span class="keyword">returns</span> (Massage) </span>&#123;</span><br><span class="line">      <span class="comment">// http option</span></span><br><span class="line">      <span class="keyword">option</span> (google.api.http) = &#123;</span><br><span class="line">        post: <span class="string">&quot;/hello&quot;</span></span><br><span class="line">        body: <span class="string">&quot;*&quot;</span></span><br><span class="line">      &#125;;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">......</span><br></pre></td></tr></table></figure>
+
+
+
+<h4 id="2-生成gRPC网关相关代码"><a href="#2-生成gRPC网关相关代码" class="headerlink" title="2.生成gRPC网关相关代码"></a>2.生成gRPC网关相关代码</h4><p>通过protoc命令生成gRPC网关相关代码。这里需要引入google api的proto文件。</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">protoc --go_out=. -I=. -I$GOPATH/src/github.com/googleapis/googleapis massage.proto</span><br><span class="line"></span><br><span class="line">protoc --go-grpc_out=. -I=. -I$GOPATH/src/github.com/googleapis/googleapis massage.proto</span><br><span class="line"></span><br><span class="line">protoc --grpc-gateway_out=logtostderr=true:. -I=. -I$GOPATH/src/github.com/googleapis/googleapis massage.proto</span><br></pre></td></tr></table></figure>
+
+
+
+<h4 id="3-新增HTTP服务代码"><a href="#3-新增HTTP服务代码" class="headerlink" title="3.新增HTTP服务代码"></a>3.新增HTTP服务代码</h4><p>新增http_server/main.go, 实现http服务，相关认证选项和拦截器选项参考前几章客户端请求选项，这里自演示部分代码。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">ctx, cancel := context.WithCancel(context.Background())</span><br><span class="line"><span class="keyword">defer</span> cancel()</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">endPoint := <span class="string">&quot;127.0.0.1:9000&quot;</span></span><br><span class="line">mux := runtime.NewServeMux()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 添加客户端请求选项</span></span><br><span class="line">opts := <span class="built_in">make</span>([]grpc.DialOption, <span class="number">0</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// TLS认证（如果开启TLS认证）</span></span><br><span class="line">creds, err := credentials.NewClientTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;www.zhouxuwen.com&quot;</span>)</span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.WithTransportCredentials(creds))</span><br><span class="line"></span><br><span class="line"><span class="comment">// 自定义认证方式（如果开启自定义认证）</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.WithPerRPCCredentials(<span class="built_in">new</span>(authCredential)))</span><br><span class="line"></span><br><span class="line"><span class="comment">// HTTP转grpc</span></span><br><span class="line">err = protobuf.RegisterHelloServiceHandlerFromEndpoint(ctx, mux, endPoint, opts)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;Register handler err:%v\n&quot;</span>, err)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">fmt.Printf(<span class="string">&quot;HTTP Listen on 8080\n&quot;</span>)</span><br><span class="line">http.ListenAndServe(<span class="string">&quot;:8080&quot;</span>, mux)</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+
+
+<h4 id="4-启动HTTP服务和gRPC服务端"><a href="#4-启动HTTP服务和gRPC服务端" class="headerlink" title="4.启动HTTP服务和gRPC服务端"></a>4.启动HTTP服务和gRPC服务端</h4><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line"><span class="meta">&gt;</span><span class="bash"> curl -X POST -d <span class="string">&#x27;&#123;&quot;massage&quot;:&quot;grpc gateway&quot;&#125;&#x27;</span> http://127.0.0.1:8080/hello</span></span><br><span class="line"><span class="meta">&gt;</span><span class="bash"> &#123;<span class="string">&quot;massage&quot;</span>:<span class="string">&quot;hello grpc gateway !&quot;</span>&#125;</span></span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="升级gRPC服务端"><a href="#升级gRPC服务端" class="headerlink" title="升级gRPC服务端"></a>升级gRPC服务端</h3><p>上面方法通过新开启一个HTTP服务实现了通过http请求转换成gRPC客户端请求发送服务端。这样我们是同时开启HTTP和gRPC两个服务，虽然解决了了重复工作的问题，但我们还是得维护两个服务，也不太合适，我们可以将这两个服务整合在一起，共用同一端口号。同时提供http和gRPC两种调用方式。</p>
+<h4 id="1-修改gRPC服务端代码"><a href="#1-修改gRPC服务端代码" class="headerlink" title="1.修改gRPC服务端代码"></a>1.修改gRPC服务端代码</h4><p>只需要修改gRPC服务端代码，将之前的gRPC服务端加上http网关相关，代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">	endPoint := <span class="string">&quot;localhost:9000&quot;</span></span><br><span class="line">	listen, err := net.Listen(<span class="string">&quot;tcp&quot;</span>, endPoint)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;tcp listen err:%v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// rpc server</span></span><br><span class="line">	opts := <span class="built_in">make</span>([]grpc.ServerOption, <span class="number">0</span>)</span><br><span class="line">	creds, err := credentials.NewServerTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;./keys/server.key&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// TLS认证</span></span><br><span class="line">	opts = <span class="built_in">append</span>(opts, grpc.Creds(creds))</span><br><span class="line">	<span class="comment">// 自定义认证</span></span><br><span class="line">	opts = <span class="built_in">append</span>(opts, grpc.UnaryInterceptor(interceptor.Interceptor))</span><br><span class="line">	server := grpc.NewServer(opts...)</span><br><span class="line">	protobuf.RegisterHelloServiceServer(server, &amp;service.HelloService)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">	<span class="comment">// http gateway server</span></span><br><span class="line">	gwOpts := <span class="built_in">make</span>([]grpc.DialOption, <span class="number">0</span>)</span><br><span class="line">	gwCreds, err := credentials.NewClientTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;www.zhouxuwen.com&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// tls认证</span></span><br><span class="line">	gwOpts = <span class="built_in">append</span>(gwOpts, grpc.WithTransportCredentials(gwCreds))</span><br><span class="line">	<span class="comment">// 自定义认证方式</span></span><br><span class="line">	gwOpts = <span class="built_in">append</span>(gwOpts, grpc.WithPerRPCCredentials(&amp;interceptor.AuthCredential))</span><br><span class="line">	<span class="comment">// 请求拦截</span></span><br><span class="line">	gwOpts = <span class="built_in">append</span>(gwOpts, grpc.WithUnaryInterceptor(interceptor.ClientInterceptor))</span><br><span class="line"></span><br><span class="line">	gwmux := runtime.NewServeMux()</span><br><span class="line">	err = protobuf.RegisterHelloServiceHandlerFromEndpoint(context.Background(), gwmux, endPoint, gwOpts)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;register http gateway server fail. err: %v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"></span><br><span class="line">	<span class="comment">// http server</span></span><br><span class="line">	mux := http.NewServeMux()</span><br><span class="line">	mux.Handle(<span class="string">&quot;/&quot;</span>, gwmux)</span><br><span class="line">	tlsConfig, err := getTLSConfig()</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;get tls config err :%v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">// http and gRPC server</span></span><br><span class="line">	srv := &amp;http.Server&#123;</span><br><span class="line">		Addr:      endPoint,</span><br><span class="line">		Handler:   grpcHandlerFunc(server, mux),</span><br><span class="line">		TLSConfig: tlsConfig,</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	fmt.Printf(<span class="string">&quot;gRPC and http listen at :%v\n&quot;</span>, endPoint)</span><br><span class="line">	err = srv.Serve(tls.NewListener(listen, tlsConfig))</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;%v\n&quot;</span>, errors.New(fmt.Sprintf(<span class="string">&quot;failed to serve: %v&quot;</span>, err)))</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">getTLSConfig</span><span class="params">()</span> <span class="params">(*tls.Config, error)</span></span> &#123;</span><br><span class="line">	cert, _ := ioutil.ReadFile(<span class="string">&quot;./keys/server.pem&quot;</span>)</span><br><span class="line">	key, _ := ioutil.ReadFile(<span class="string">&quot;./keys/server.key&quot;</span>)</span><br><span class="line">	<span class="keyword">var</span> demoKeyPair *tls.Certificate</span><br><span class="line">	pair, err := tls.X509KeyPair(cert, key)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Printf(<span class="string">&quot;TLS KeyPair err: %v\n&quot;</span>, err)</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">	&#125;</span><br><span class="line">	demoKeyPair = &amp;pair</span><br><span class="line">	<span class="keyword">return</span> &amp;tls.Config&#123;</span><br><span class="line">		Certificates: []tls.Certificate&#123;*demoKeyPair&#125;,</span><br><span class="line">		NextProtos:   []<span class="keyword">string</span>&#123;http2.NextProtoTLS&#125;, <span class="comment">// HTTP2 TLS支持</span></span><br><span class="line">	&#125;, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">// grpcHandlerFunc returns an http.Handler that delegates to grpcServer on incoming gRPC</span></span><br><span class="line"><span class="comment">// connections or otherHandler otherwise. Copied from cockroachdb.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">grpcHandlerFunc</span><span class="params">(grpcServer *grpc.Server, otherHandler http.Handler)</span> <span class="title">http</span>.<span class="title">Handler</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> otherHandler == <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> http.HandlerFunc(<span class="function"><span class="keyword">func</span><span class="params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;</span><br><span class="line">			grpcServer.ServeHTTP(w, r)</span><br><span class="line">		&#125;)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> http.HandlerFunc(<span class="function"><span class="keyword">func</span><span class="params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;</span><br><span class="line">		<span class="keyword">if</span> r.ProtoMajor == <span class="number">2</span> &amp;&amp; strings.Contains(r.Header.Get(<span class="string">&quot;Content-Type&quot;</span>), <span class="string">&quot;application/grpc&quot;</span>) &#123;</span><br><span class="line">			grpcServer.ServeHTTP(w, r)</span><br><span class="line">		&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">			otherHandler.ServeHTTP(w, r)</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h4 id="2-启动服务"><a href="#2-启动服务" class="headerlink" title="2.启动服务"></a>2.启动服务</h4><p>启动服务，通过gRPC客户端和http请求的方式进行验证。</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line"><span class="meta">&gt;</span><span class="bash"> curl -X POST -k https://127.0.0.1:9000/hello -d <span class="string">&#x27;&#123;&quot;massage&quot;:&quot;grpc and http&quot;&#125;&#x27;</span></span></span><br><span class="line"><span class="meta">&gt;</span><span class="bash"> &#123;<span class="string">&quot;massage&quot;</span>:<span class="string">&quot;hello grpc and http !&quot;</span>&#125;%</span></span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
+
+
+
+]]></content>
+      <categories>
+        <category>gRPC</category>
+      </categories>
+      <tags>
+        <tag>gRPC</tag>
+        <tag>HTTP</tag>
+        <tag>gateway</tag>
+        <tag>grpc-gateway</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>微服务架构系列（一）-服务注册与发现</title>
+    <url>/2022/02/18/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E7%8E%B0/</url>
+    <content><![CDATA[<blockquote>
+<p>为什么有服务注册与发现？解决了什么问题？如何使用？</p>
+</blockquote>
+<a id="more"></a>
+
+
+
+<h2 id="为什么有服务注册与发现？解决了什么问题？"><a href="#为什么有服务注册与发现？解决了什么问题？" class="headerlink" title="为什么有服务注册与发现？解决了什么问题？"></a>为什么有服务注册与发现？解决了什么问题？</h2><p>​       服务根据功能进行了划分，各自负责自己的模块；但服务和服务之间还需要通信，服务部署很多台，我们要从中获取一台服务建立通信；如果没有服务注册和发现中间件我们要怎么做呢？大部分的做法可能是将所有服务的地址权重写在配置中，通过类负载均衡算法从中选择一个建立连接到达通信的目的，这么做是没问题的，但这么做方便吗？不方便。首先每次新增或移除一个服务都要更新配置文件，而且这类操作通常会比较频繁。其次如果是用容器部署的话，服务的地址都动态服务，如果还是通过人工进行配置，那对运维一点都不友好。服务注册与发现中间件是什么呢？它其实就是公共的服务，保存服务的注册信息，且必须具备高可用和一致性。服务注册时将信息记录，服务发现时获取注册列表。这不就解决了上面所说的问题。</p>
+<h2 id="使用总结为三步："><a href="#使用总结为三步：" class="headerlink" title="使用总结为三步："></a>使用总结为三步：</h2><ol>
+<li><p>服务提供者（Provider）与中间件服务（etcd、consul等）建立连接；</p>
+</li>
+<li><p>服务提供者向中间件服务注册，供其他服务调用；</p>
+</li>
+<li><p>服务消费者（consumer）从中间件服务发现服务（从服务列表中通过负载均衡算法选取）进行调用；</p>
+</li>
+</ol>
+<h2 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h2><p>​       打算写一个服务架构练练手，尽量功能齐全，集成所有市面上使用广泛的中间件。其实现在已经提出了服务网格（Service Mesh，已经有机会也会写写），相当于剥离了业务层和管理层，写代码只需要关注业务，无需关心基础设施层。但我为什么还要回过头去写老的服务机构呢？没为什么，就是学习，你写代码的时候也从来没去看过源码，但面试官就是爱问一个道理。</p>
+]]></content>
+      <categories>
+        <category>微服务架构</category>
+      </categories>
+      <tags>
+        <tag>etcd</tag>
+        <tag>consul</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Golang系列（一）-context使用</title>
+    <url>/2021/07/12/Golang%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-context/</url>
+    <content><![CDATA[<blockquote>
+<p>go的context包详解，context中文翻译过来叫“上下文”，本篇文章讲一下它具体的作用是什么。你在什么情况下可以用到它。</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="引言"><a href="#引言" class="headerlink" title="引言"></a>引言</h2><p>http server 常为每个请求创建一个 goroutine 以并发地处理请求，同时这个 goroutine 又会创建更多的 gotoutine 来访问数据库和缓存或RPC服务，当请求结束或被终止，能释放所有 gotoutine的资源。因此就需要一种机制，在goroutine之间传递信号消息。</p>
+<h2 id="简介"><a href="#简介" class="headerlink" title="简介"></a>简介</h2><p>context 中文翻译过来叫”上下文“，常被用来 goroutine 之间传递信息和信号的。信息和信号包括截至时间（deadline)，取消信号(cancellation signals) 以及跨边界需要往下传递的键值对信息。</p>
+<h2 id="特性"><a href="#特性" class="headerlink" title="特性"></a>特性</h2><ul>
+<li>context的设计是可通过已有Context进行树型派生，已管理一组过程的生命周期。单Context是不可变的，但可以通过WithValue、WithCancel、WithTimeout方法进行派生并附加一些属性（键值、可取消、时限），以构建一组树型组织的context。</li>
+<li>当根 Context 结束时，所有由其派生出的 Context 也会被一并取消。也就是说，父 Context 的生命周期涵盖所有子 Context 的生命周期。</li>
+</ul>
+<h2 id="使用"><a href="#使用" class="headerlink" title="使用"></a>使用</h2><h3 id="创建根Context"><a href="#创建根Context" class="headerlink" title="创建根Context"></a>创建根Context</h3><p><code>context.Background() </code>创建一个空的Context（not nil), 常用作初始化创建根Context。</p>
+<h3 id="派生携带键值信息Context"><a href="#派生携带键值信息Context" class="headerlink" title="派生携带键值信息Context"></a>派生携带键值信息Context</h3><p><code>context.WithValue(parentContext, key, value)</code> 在父节点Context的基础上创建一个新的携带键值信息的的子节点Context。</p>
+<h3 id="派生可取消Context"><a href="#派生可取消Context" class="headerlink" title="派生可取消Context"></a>派生可取消Context</h3><p><code>context.WithCancel(parentContext) </code>在父节点Context的基础上创建一个新的可取消的子节点Context，返回新创建的子节点Context和取消方法cancelFunc。</p>
+<h3 id="派生有时间限制Context"><a href="#派生有时间限制Context" class="headerlink" title="派生有时间限制Context"></a>派生有时间限制Context</h3><p><code>context.WithTimeout(parentContext，timeout)</code>在父节点Context的基础上创建新的有时间限制的子节点Context，返回新创建子节点Context和取消方法cancelFunc。超过时间限制后，该Conext会发送信号到Done通道，所有子节点检测到信号立即退出。</p>
+<h3 id="派生有截至时间Context"><a href="#派生有截至时间Context" class="headerlink" title="派生有截至时间Context"></a>派生有截至时间Context</h3><p><code>context.WithDeadline(parentContext, time)</code>在父节点Context的基础上创建新的有截至时间的子节点Context,返回新创建子节点Context和取消方法cancelFunc。<code>context.Timeout(parentContext，timeout)</code>等价于<code>context.Deadline(parentContext,time.Now().Add(timeout))</code>。</p>
+<p>​    </p>
+<h2 id="注意"><a href="#注意" class="headerlink" title="注意"></a>注意</h2><ul>
+<li>Background 创建的根节点没有时限，也不能取消。</li>
+<li>WithCancel、WithTimeout、WithDeadline方法是从父context派生出新的context，新的context受限与父context的生命周期。新context应注意在对应过程结束后及时cancel，以防止goroutine泄露。</li>
+<li>不能使用nil Context，尽管语法上允许。不知道使用什么值合适时，可以使用 <code>context.TODO()</code>。</li>
+</ul>
+]]></content>
+      <categories>
+        <category>Golang</category>
+      </categories>
+      <tags>
+        <tag>Golang</tag>
+        <tag>context</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>微服务架构系列（一）-服务注册与发现（2）</title>
+    <url>/2022/03/03/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E7%8E%B0%EF%BC%882%EF%BC%89/</url>
+    <content><![CDATA[<blockquote>
+<p>服务注册与发现之go语言设计与实现，为什么需要租约模式？watch机制解决了什么问题？</p>
+</blockquote>
+<a id="more"></a>
+
+
+
+<h2 id="1-定义接口"><a href="#1-定义接口" class="headerlink" title="1.定义接口"></a>1.定义接口</h2><p>首先确认整个流程需要做的事情；</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">1. 创建注册表对象,建立连接;</span><br><span class="line">2. 服务注册到注册表,定期续租;</span><br><span class="line">3. 服务从注册表中注销;</span><br><span class="line">4. 从注册表中获取服务列表;</span><br><span class="line">5. 监听key,当key变化时更新服务列表;</span><br></pre></td></tr></table></figure>
+
+<p>从这些需要做的事情可以抽象出三个角色注册者（Registrar）、发现者（Discovery）、观察者（Watcher）以及方法。伪代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">type</span> Registrar <span class="keyword">interface</span> &#123;</span><br><span class="line">  Register()</span><br><span class="line">  DeRegister()</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Discovery <span class="keyword">interface</span> &#123; </span><br><span class="line">  Discover() []*Service</span><br><span class="line">  Watch(key <span class="keyword">string</span>) *Watcher</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Watcher <span class="keyword">interface</span> &#123;</span><br><span class="line">  Naxt() []*Service</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="2-实现接口"><a href="#2-实现接口" class="headerlink" title="2.实现接口"></a>2.实现接口</h2><h3 id="Consul"><a href="#Consul" class="headerlink" title="Consul"></a>Consul</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/consul/v2</span><br></pre></td></tr></table></figure>
+
+<h3 id="Etcd"><a href="#Etcd" class="headerlink" title="Etcd"></a>Etcd</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/etcd/v2</span><br></pre></td></tr></table></figure>
+
+<h3 id="zookeeper"><a href="#zookeeper" class="headerlink" title="zookeeper"></a>zookeeper</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/zookeeper/v2</span><br></pre></td></tr></table></figure>
+
+<h3 id="Nacos"><a href="#Nacos" class="headerlink" title="Nacos"></a>Nacos</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/nacos/v2</span><br></pre></td></tr></table></figure>
+
+<h3 id="kubernetes"><a href="#kubernetes" class="headerlink" title="kubernetes"></a>kubernetes</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/kubernetes/v2</span><br></pre></td></tr></table></figure>
+
+<h3 id="polaris"><a href="#polaris" class="headerlink" title="polaris"></a>polaris</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/polaris/v2</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="3-问题"><a href="#3-问题" class="headerlink" title="3.问题"></a>3.问题</h2><h3 id="为什么需要租约模式？定期续租是为了什么？"><a href="#为什么需要租约模式？定期续租是为了什么？" class="headerlink" title="为什么需要租约模式？定期续租是为了什么？"></a>为什么需要租约模式？定期续租是为了什么？</h3><p>服务注册到注册表中，如果服务挂了，不从注册表中移除，它还会在注册表中，请求就可能进入异常服务中，这并不是我们想要的结果。于是便有了租约模式，服务需要定期发送续租请求，在指定时间（keepalive）内未发送请求，就认为服务处于异常状态，将被从注册表中移除。</p>
+<h3 id="watch机制是解决什么问题？"><a href="#watch机制是解决什么问题？" class="headerlink" title="watch机制是解决什么问题？"></a>watch机制是解决什么问题？</h3><p>服务发现是从注册表中发现一组服务列表，服务列表并未更新，我们还是需要主动从注册表中获取服务列表，在我们看来服务列表未更新，这种操作是没必要的，为了避免这种反复轮询，便有了watch机制，从主动变成了被动，我们对key进行监听，如果key的value更新了，便进行通知，我们才去获取服务列表进行更新。</p>
+<h2 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h2><p>虽然服务注册与发现的基础使用是有了，但实际使用下来会有以下两个问题：</p>
+<ol>
+<li><p>服务发现获取到是服务列表，从中选择一个涉及负载均衡算法</p>
+</li>
+<li><p>服务发现获取的是服务连接信息，其中可能是http服务，可能是grpc服务，不能很好的使用；</p>
+</li>
+</ol>
+<p>从这两个问题我们可以抽象几个角色选择器（Selecter）、均衡器（Banlancer）、解析器（Reslover）等。下一篇从这两个问题出发介绍这几个角色的实现。</p>
+]]></content>
+      <categories>
+        <category>微服务架构</category>
+      </categories>
+      <tags>
+        <tag>etcd</tag>
+        <tag>consul</tag>
       </tags>
   </entry>
 </search>
