@@ -1,6 +1,114 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title>Golang性能优化篇</title>
+    <url>/2022/02/11/Golang%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%AF%87/</url>
+    <content><![CDATA[<blockquote>
+<p>在编写代码时常使用且常忽视的性能问题进行总结。这篇文章将持续更新…</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="string-和-byte-相互转换"><a href="#string-和-byte-相互转换" class="headerlink" title="string 和 []byte 相互转换"></a>string 和 []byte 相互转换</h2><p>无论是从哪种类型转换到另一种都需要对其中的内容进行拷贝，string 和 []byte 相互转换 也不例外，内存拷贝的性能损耗会随着字符串数组和字节长度的增长而增长，所以在做这种类型转换时一定要注意性能上的问题。</p>
+<p>接下来我们可以使用一些方法来避免这种大批量的拷贝工作，这个方法就是可以绕过类型检查的 unsafe.Pointer</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">str2bytes</span><span class="params">(s <span class="keyword">string</span>)</span> []<span class="title">byte</span></span> &#123;</span><br><span class="line">   x := (*[<span class="number">2</span>]<span class="keyword">uintptr</span>)(unsafe.Pointer(&amp;s))</span><br><span class="line">   b := [<span class="number">3</span>]<span class="keyword">uintptr</span>&#123;x[<span class="number">0</span>], x[<span class="number">1</span>], x[<span class="number">1</span>]&#125;</span><br><span class="line">   <span class="keyword">return</span> *(*[]<span class="keyword">byte</span>)(unsafe.Pointer(&amp;b))</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">bytes2str</span><span class="params">(b []<span class="keyword">byte</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">   <span class="keyword">return</span> *(*<span class="keyword">string</span>)(unsafe.Pointer(&amp;b))</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    </p>
+<h2 id="字符串连接"><a href="#字符串连接" class="headerlink" title="字符串连接"></a>字符串连接</h2><p>字符串连接有很多方法：</p>
+<ol>
+<li>直接通过运算符<code>+</code></li>
+<li>fmt.Sprintf()</li>
+<li>bytes.Buffer{}</li>
+</ol>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Buffer</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	buffer := bytes.Buffer&#123;&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(s)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	buffer.Grow(n)</span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		buffer.WriteString(s)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> buffer.String()</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<ol start="4">
+<li>strings.Builder{}</li>
+</ol>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Builder</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	builder := strings.Builder&#123;&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(s)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	builder.Grow(n)</span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		builder.WriteString(s)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> builder.String()</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<ol start="5">
+<li>copy方法</li>
+</ol>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Copy</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	<span class="keyword">switch</span> <span class="built_in">len</span>(str) &#123;</span><br><span class="line">	<span class="keyword">case</span> <span class="number">0</span>:</span><br><span class="line">		<span class="keyword">return</span> <span class="string">&quot;&quot;</span></span><br><span class="line">	<span class="keyword">case</span> <span class="number">1</span>:</span><br><span class="line">		<span class="keyword">return</span> str[<span class="number">0</span>]</span><br><span class="line">	&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(Str2Bytes(s))</span><br><span class="line">	&#125;</span><br><span class="line">	bytes := <span class="built_in">make</span>([]<span class="keyword">byte</span>, n)</span><br><span class="line">	c := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		c += <span class="built_in">copy</span>(bytes[c:], Str2Bytes(s))</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> Bytes2Str(bytes)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<p>既然方法有这么多种，性能问题就会有差异，通过benchmark测试查看一下:</p>
+<p><img src="/images/benchmark-2022021101.png" alt="benchmark-2022021101"></p>
+<p>可以看出copy和strings.Builder性能上是最好的，fmt.Sprintf是最差的，为什么呢？要知道golang 里面的字符串都是不可变的，每次运算都会产生一个新的字符串，所以会产生很多临时的无用的字符串，不仅没有用，还会给 gc 带来额外的负担，所以性能变差。而copy和strings.Builder根据长度预先分配内存，没有产生很多临时的无用的字符串。本质上就是以空间换时间。</p>
+<h2 id="json序列化"><a href="#json序列化" class="headerlink" title="json序列化"></a>json序列化</h2><p>json系列我们最常用的就是标准库里的encoding/json，但为提高性能可以使用一些第三方库替换。如json-iterator、easyjson等。</p>
+<p>性能提升多少呢？我们通过banchmark测试看一下:</p>
+<p><img src="/images/benchmark-2022021102.png" alt="benchmark-2022021101"></p>
+<p>可以看到json-iterator和easyjson相比easyjson提升整整一倍。但第三方库有一定的维护成本，但数据量大的时候，使用第三方库也是值得的。</p>
+]]></content>
+      <categories>
+        <category>Golang</category>
+      </categories>
+      <tags>
+        <tag>Golang</tag>
+        <tag>json</tag>
+        <tag>string</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Golang系列（一）-context使用</title>
+    <url>/2021/07/12/Golang%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-context/</url>
+    <content><![CDATA[<blockquote>
+<p>go的context包详解，context中文翻译过来叫“上下文”，本篇文章讲一下它具体的作用是什么。你在什么情况下可以用到它。</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="引言"><a href="#引言" class="headerlink" title="引言"></a>引言</h2><p>http server 常为每个请求创建一个 goroutine 以并发地处理请求，同时这个 goroutine 又会创建更多的 gotoutine 来访问数据库和缓存或RPC服务，当请求结束或被终止，能释放所有 gotoutine的资源。因此就需要一种机制，在goroutine之间传递信号消息。</p>
+<h2 id="简介"><a href="#简介" class="headerlink" title="简介"></a>简介</h2><p>context 中文翻译过来叫”上下文“，常被用来 goroutine 之间传递信息和信号的。信息和信号包括截至时间（deadline)，取消信号(cancellation signals) 以及跨边界需要往下传递的键值对信息。</p>
+<h2 id="特性"><a href="#特性" class="headerlink" title="特性"></a>特性</h2><ul>
+<li>context的设计是可通过已有Context进行树型派生，已管理一组过程的生命周期。单Context是不可变的，但可以通过WithValue、WithCancel、WithTimeout方法进行派生并附加一些属性（键值、可取消、时限），以构建一组树型组织的context。</li>
+<li>当根 Context 结束时，所有由其派生出的 Context 也会被一并取消。也就是说，父 Context 的生命周期涵盖所有子 Context 的生命周期。</li>
+</ul>
+<h2 id="使用"><a href="#使用" class="headerlink" title="使用"></a>使用</h2><h3 id="创建根Context"><a href="#创建根Context" class="headerlink" title="创建根Context"></a>创建根Context</h3><p><code>context.Background() </code>创建一个空的Context（not nil), 常用作初始化创建根Context。</p>
+<h3 id="派生携带键值信息Context"><a href="#派生携带键值信息Context" class="headerlink" title="派生携带键值信息Context"></a>派生携带键值信息Context</h3><p><code>context.WithValue(parentContext, key, value)</code> 在父节点Context的基础上创建一个新的携带键值信息的的子节点Context。</p>
+<h3 id="派生可取消Context"><a href="#派生可取消Context" class="headerlink" title="派生可取消Context"></a>派生可取消Context</h3><p><code>context.WithCancel(parentContext) </code>在父节点Context的基础上创建一个新的可取消的子节点Context，返回新创建的子节点Context和取消方法cancelFunc。</p>
+<h3 id="派生有时间限制Context"><a href="#派生有时间限制Context" class="headerlink" title="派生有时间限制Context"></a>派生有时间限制Context</h3><p><code>context.WithTimeout(parentContext，timeout)</code>在父节点Context的基础上创建新的有时间限制的子节点Context，返回新创建子节点Context和取消方法cancelFunc。超过时间限制后，该Conext会发送信号到Done通道，所有子节点检测到信号立即退出。</p>
+<h3 id="派生有截至时间Context"><a href="#派生有截至时间Context" class="headerlink" title="派生有截至时间Context"></a>派生有截至时间Context</h3><p><code>context.WithDeadline(parentContext, time)</code>在父节点Context的基础上创建新的有截至时间的子节点Context,返回新创建子节点Context和取消方法cancelFunc。<code>context.Timeout(parentContext，timeout)</code>等价于<code>context.Deadline(parentContext,time.Now().Add(timeout))</code>。</p>
+<p>​    </p>
+<h2 id="注意"><a href="#注意" class="headerlink" title="注意"></a>注意</h2><ul>
+<li>Background 创建的根节点没有时限，也不能取消。</li>
+<li>WithCancel、WithTimeout、WithDeadline方法是从父context派生出新的context，新的context受限与父context的生命周期。新context应注意在对应过程结束后及时cancel，以防止goroutine泄露。</li>
+<li>不能使用nil Context，尽管语法上允许。不知道使用什么值合适时，可以使用 <code>context.TODO()</code>。</li>
+</ul>
+]]></content>
+      <categories>
+        <category>Golang</category>
+      </categories>
+      <tags>
+        <tag>Golang</tag>
+        <tag>context</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>RPC系列（一）-RPC与RUST比较</title>
+    <url>/2021/07/06/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-RPC%E4%B8%8ERUST%E6%AF%94%E8%BE%83/</url>
+    <content><![CDATA[<blockquote>
+<p>本篇文章主要介绍RPC是什么，RPC的具体过程，RPC和RUST的比较以及如何选择。</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="RPC是什么"><a href="#RPC是什么" class="headerlink" title="RPC是什么"></a>RPC是什么</h2><p>RPC(Remote Procedure Call)是远程过程调用的简称。主要目的就是一个应用调用另一个应用的方法，调用方通过调用代理方法的形式调用被调用方的实现方法。调用协议常包括通信协议和序列化协议。底层的通信协议可以是HTTP、TCP等，根据不同的RPC框架而定。序列化协议常用ProtoBuf协议。</p>
+<h2 id="RPC具体过程"><a href="#RPC具体过程" class="headerlink" title="RPC具体过程"></a>RPC具体过程</h2><p><img src="/images/rpc%E5%85%B7%E4%BD%93%E6%B5%81%E7%A8%8B.png" alt="rpc具体流程"></p>
+<h2 id="RPC和RUST比较"><a href="#RPC和RUST比较" class="headerlink" title="RPC和RUST比较"></a>RPC和RUST比较</h2><p>RUST是基于HTTP协议的RESTFul API设计风格的通信方式，也常用于应用之间的信息通信。但设计理念和底层原理是完全不同的。</p>
+<p>HTTP+Rustful的优点是可读性好，支持跨语言。在运用之间通信的使用超越RPC。但缺点也很明显，HTTP是第七层协议，报文包含大量头部信息，有用信息占比少，因此效率和速度较低。另外使用HTTP协议调用接口封装封装，常需要封装很多参数以及校验方法。RPC则更好与其互补，但牺牲可读性来通过效率和性能是可取的。具体怎么选，需根据业务来，灵活站位。</p>
+<h2 id="RPC使用场景"><a href="#RPC使用场景" class="headerlink" title="RPC使用场景"></a>RPC使用场景</h2><p>Rustful常用于与第三方系统之间的信息通信，通过对外调用的接口。</p>
+<p>RPC常用于自家系统之间的互相调用，更安全高效。</p>
+]]></content>
+      <categories>
+        <category>RPC</category>
+      </categories>
+      <tags>
+        <tag>RPC</tag>
+        <tag>RUST</tag>
+        <tag>Rustful</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>RPC序列（三）-gRPC安全认证</title>
     <url>/2021/07/15/RPC%E5%BA%8F%E5%88%97%EF%BC%88%E4%B8%89%EF%BC%89-gRPC%E5%AE%89%E5%85%A8%E8%AE%A4%E8%AF%81/</url>
     <content><![CDATA[<blockquote>
@@ -64,109 +172,9 @@
         <category>gRPC</category>
       </categories>
       <tags>
-        <tag>gRPC</tag>
         <tag>RPC</tag>
+        <tag>gRPC</tag>
         <tag>SSL/TLS</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Golang系列（一）-context使用</title>
-    <url>/2021/07/12/Golang%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-context/</url>
-    <content><![CDATA[<blockquote>
-<p>go的context包详解，context中文翻译过来叫“上下文”，本篇文章讲一下它具体的作用是什么。你在什么情况下可以用到它。</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="引言"><a href="#引言" class="headerlink" title="引言"></a>引言</h2><p>http server 常为每个请求创建一个 goroutine 以并发地处理请求，同时这个 goroutine 又会创建更多的 gotoutine 来访问数据库和缓存或RPC服务，当请求结束或被终止，能释放所有 gotoutine的资源。因此就需要一种机制，在goroutine之间传递信号消息。</p>
-<h2 id="简介"><a href="#简介" class="headerlink" title="简介"></a>简介</h2><p>context 中文翻译过来叫”上下文“，常被用来 goroutine 之间传递信息和信号的。信息和信号包括截至时间（deadline)，取消信号(cancellation signals) 以及跨边界需要往下传递的键值对信息。</p>
-<h2 id="特性"><a href="#特性" class="headerlink" title="特性"></a>特性</h2><ul>
-<li>context的设计是可通过已有Context进行树型派生，已管理一组过程的生命周期。单Context是不可变的，但可以通过WithValue、WithCancel、WithTimeout方法进行派生并附加一些属性（键值、可取消、时限），以构建一组树型组织的context。</li>
-<li>当根 Context 结束时，所有由其派生出的 Context 也会被一并取消。也就是说，父 Context 的生命周期涵盖所有子 Context 的生命周期。</li>
-</ul>
-<h2 id="使用"><a href="#使用" class="headerlink" title="使用"></a>使用</h2><h3 id="创建根Context"><a href="#创建根Context" class="headerlink" title="创建根Context"></a>创建根Context</h3><p><code>context.Background() </code>创建一个空的Context（not nil), 常用作初始化创建根Context。</p>
-<h3 id="派生携带键值信息Context"><a href="#派生携带键值信息Context" class="headerlink" title="派生携带键值信息Context"></a>派生携带键值信息Context</h3><p><code>context.WithValue(parentContext, key, value)</code> 在父节点Context的基础上创建一个新的携带键值信息的的子节点Context。</p>
-<h3 id="派生可取消Context"><a href="#派生可取消Context" class="headerlink" title="派生可取消Context"></a>派生可取消Context</h3><p><code>context.WithCancel(parentContext) </code>在父节点Context的基础上创建一个新的可取消的子节点Context，返回新创建的子节点Context和取消方法cancelFunc。</p>
-<h3 id="派生有时间限制Context"><a href="#派生有时间限制Context" class="headerlink" title="派生有时间限制Context"></a>派生有时间限制Context</h3><p><code>context.WithTimeout(parentContext，timeout)</code>在父节点Context的基础上创建新的有时间限制的子节点Context，返回新创建子节点Context和取消方法cancelFunc。超过时间限制后，该Conext会发送信号到Done通道，所有子节点检测到信号立即退出。</p>
-<h3 id="派生有截至时间Context"><a href="#派生有截至时间Context" class="headerlink" title="派生有截至时间Context"></a>派生有截至时间Context</h3><p><code>context.WithDeadline(parentContext, time)</code>在父节点Context的基础上创建新的有截至时间的子节点Context,返回新创建子节点Context和取消方法cancelFunc。<code>context.Timeout(parentContext，timeout)</code>等价于<code>context.Deadline(parentContext,time.Now().Add(timeout))</code>。</p>
-<p>​    </p>
-<h2 id="注意"><a href="#注意" class="headerlink" title="注意"></a>注意</h2><ul>
-<li>Background 创建的根节点没有时限，也不能取消。</li>
-<li>WithCancel、WithTimeout、WithDeadline方法是从父context派生出新的context，新的context受限与父context的生命周期。新context应注意在对应过程结束后及时cancel，以防止goroutine泄露。</li>
-<li>不能使用nil Context，尽管语法上允许。不知道使用什么值合适时，可以使用 <code>context.TODO()</code>。</li>
-</ul>
-]]></content>
-      <categories>
-        <category>Golang</category>
-      </categories>
-      <tags>
-        <tag>Golang</tag>
-        <tag>context</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>RPC系列（二）-gRPC入门</title>
-    <url>/2021/07/08/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%BA%8C%EF%BC%89-gRPC%E5%85%A5%E9%97%A8/</url>
-    <content><![CDATA[<blockquote>
-<p>简单介绍gRPC和ProtoBuf，以及gRPC和ProtoBuf的安装和简单使用，并用golang实现简单RPC服务。</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="gRPC简介"><a href="#gRPC简介" class="headerlink" title="gRPC简介"></a>gRPC简介</h2><p><a href="https://grpc.io/">gRPC</a> 是由Google开发的远程过程调用开源框架，支持多种开发语言，且支持跨语言通信。是基于HTTP2通信协议标准设计开发,默认采用Protocol Buffers数据序列化协议。</p>
-<h3 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">go get google.golang.org&#x2F;grpc</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">go install google.golang.org&#x2F;protobuf&#x2F;cmd&#x2F;protoc-gen-go</span><br><span class="line">go install google.golang.org&#x2F;grpc&#x2F;cmd&#x2F;protoc-gen-go-grpc</span><br></pre></td></tr></table></figure>
-
-
-
-<h2 id="ProtoBuf简介"><a href="#ProtoBuf简介" class="headerlink" title="ProtoBuf简介"></a>ProtoBuf简介</h2><p>gRPC跨语言的支持都是通过<code>Protocol Buffers</code>这个东西，它是一个代码生成工具以及序列化工具。它可以把我们定义好的方法和数据结构转化成指定语言的代码。同时能将我们请求和响应的数据编码成gRPC能传输的形式，又能将数据序列化和反序列化成该语言能处理的形式。</p>
-<h3 id="安装-1"><a href="#安装-1" class="headerlink" title="安装"></a>安装</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">brew info protobuf</span><br></pre></td></tr></table></figure>
-
-<h3 id="使用命令"><a href="#使用命令" class="headerlink" title="使用命令"></a>使用命令</h3><p>这里不整理Protobuf文件的语法，<a href="http://www.topgoer.com/%E5%BE%AE%E6%9C%8D%E5%8A%A1/gRPC/Protobuf%E8%AF%AD%E6%B3%95.html">Protobuf语法</a>看这里。</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">protoc -I&#x3D;$SRC_DIR --go_out&#x3D;$DST_DIR $SRC_DIR&#x2F;fileName.proto</span><br><span class="line"></span><br><span class="line">protoc -I&#x3D;$SRC_DIR --go-grpc_out&#x3D;$DST_DIR $SRC_DIR&#x2F;fileName.proto</span><br></pre></td></tr></table></figure>
-
-<p>$SRC_DIR : 待编译的proto文件所在目录</p>
-<p>$DST_DIR：生成后的代码所存放的目录</p>
-<h2 id="简单示例"><a href="#简单示例" class="headerlink" title="简单示例"></a>简单示例</h2><h3 id="First-proto文件编写和生成源码"><a href="#First-proto文件编写和生成源码" class="headerlink" title="First: proto文件编写和生成源码"></a>First: proto文件编写和生成源码</h3><p>proto文件书写，先定义该通信用到的数据类型和结构，请求和响应的数据模型。</p>
-<figure class="highlight protobuf"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">message</span> <span class="title">Massage</span> </span>&#123;</span><br><span class="line">  <span class="built_in">string</span> request = <span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>再定义该通信的方法，只需要定义方法名、请求参数、响应参数即可。</p>
-<figure class="highlight protobuf"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">service</span> <span class="title">HelloService</span></span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">rpc</span> Hello(Massage) <span class="keyword">returns</span> (Massage)</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>通过protoc命名生成指定语言的代码，这里是生成go语言的代码。</p>
-<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">protoc --go_out=. massage.proto</span><br><span class="line">protoc --go-grpc_out=. massage.proto</span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="Second-Server代码编写"><a href="#Second-Server代码编写" class="headerlink" title="Second: Server代码编写"></a>Second: Server代码编写</h3><p>HelloService方法的具体实现，这里简单实现。</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(h *helloService)</span> <span class="title">Hello</span><span class="params">(c context.Context, requestMessage *protobuf.Massage)</span> <span class="params">(responseMessage *protobuf.Massage, err error)</span></span> &#123;</span><br><span class="line">	msg := <span class="string">&quot;hello &quot;</span> + requestMessage.Request</span><br><span class="line">	responseMessage = &amp;protobuf.Massage&#123;Request: msg&#125;</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>创建rpc服务，注册通信方法的具体实现。</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">server := grpc.NewServer()</span><br><span class="line">protobuf.RegisterHelloServiceServer(server, &amp;service.HelloService)</span><br></pre></td></tr></table></figure>
-
-<p>监听端口，至此简单的rpc服务就写完了。</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">listen, err := net.Listen(<span class="string">&quot;tcp&quot;</span>, <span class="string">&quot;localhost:9000&quot;</span>)</span><br><span class="line">err = server.Serve(listen)</span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="Third：Client代码编写"><a href="#Third：Client代码编写" class="headerlink" title="Third：Client代码编写"></a>Third：Client代码编写</h3><p>创建rpc客户端，建立连接。</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">conn, err := grpc.Dial(<span class="string">&quot;localhost:9000&quot;</span>, grpc.WithInsecure())</span><br><span class="line">c := protobuf.NewHelloServiceClient(conn)</span><br></pre></td></tr></table></figure>
-
-<p>发送请求信息以及读取响应信息。</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">requestMessage := &amp;protobuf.Massage&#123;Request: <span class="string">&quot;world &quot;</span>&#125;</span><br><span class="line">responseMessage, err := c.Hello(context.Background(), requestMessage)</span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
-
-
-
-]]></content>
-      <categories>
-        <category>gRPC</category>
-      </categories>
-      <tags>
-        <tag>gRPC</tag>
-        <tag>RPC</tag>
-        <tag>Golang</tag>
-        <tag>ProtoBuf</tag>
       </tags>
   </entry>
   <entry>
@@ -232,35 +240,6 @@
       </tags>
   </entry>
   <entry>
-    <title>微服务架构系列（一）-服务注册与发现</title>
-    <url>/2022/02/18/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E7%8E%B0/</url>
-    <content><![CDATA[<blockquote>
-<p>为什么有服务注册与发现？解决了什么问题？如何使用？</p>
-</blockquote>
-<a id="more"></a>
-
-
-
-<h2 id="为什么有服务注册与发现？解决了什么问题？"><a href="#为什么有服务注册与发现？解决了什么问题？" class="headerlink" title="为什么有服务注册与发现？解决了什么问题？"></a>为什么有服务注册与发现？解决了什么问题？</h2><p>​       服务根据功能进行了划分，各自负责自己的模块；但服务和服务之间还需要通信，服务部署很多台，我们要从中获取一台服务建立通信；如果没有服务注册和发现中间件我们要怎么做呢？大部分的做法可能是将所有服务的地址权重写在配置中，通过类负载均衡算法从中选择一个建立连接到达通信的目的，这么做是没问题的，但这么做方便吗？不方便。首先每次新增或移除一个服务都要更新配置文件，而且这类操作通常会比较频繁。其次如果是用容器部署的话，服务的地址都动态服务，如果还是通过人工进行配置，那对运维一点都不友好。服务注册与发现中间件是什么呢？它其实就是公共的服务，保存服务的注册信息，且必须具备高可用和一致性。服务注册时将信息记录，服务发现时获取注册列表。这不就解决了上面所说的问题。</p>
-<h2 id="使用总结为三步："><a href="#使用总结为三步：" class="headerlink" title="使用总结为三步："></a>使用总结为三步：</h2><ol>
-<li><p>服务提供者（Provider）与中间件服务（etcd、consul等）建立连接；</p>
-</li>
-<li><p>服务提供者向中间件服务注册，供其他服务调用；</p>
-</li>
-<li><p>服务消费者（consumer）从中间件服务发现服务（从服务列表中通过负载均衡算法选取）进行调用；</p>
-</li>
-</ol>
-<h2 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h2><p>​       打算写一个服务架构练练手，尽量功能齐全，集成所有市面上使用广泛的中间件。其实现在已经提出了服务网格（Service Mesh，已经有机会也会写写），相当于剥离了业务层和管理层，写代码只需要关注业务，无需关心基础设施层。但我为什么还要回过头去写老的服务机构呢？没为什么，就是学习，你写代码的时候也从来没去看过源码，但面试官就是爱问一个道理。</p>
-]]></content>
-      <categories>
-        <category>微服务架构</category>
-      </categories>
-      <tags>
-        <tag>etcd</tag>
-        <tag>consul</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>微服务架构系列（一）-服务注册与发现（2）</title>
     <url>/2022/03/03/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E7%8E%B0%EF%BC%882%EF%BC%89/</url>
     <content><![CDATA[<blockquote>
@@ -312,77 +291,98 @@
       </tags>
   </entry>
   <entry>
-    <title>Golang性能优化篇</title>
-    <url>/2022/02/11/Golang%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%AF%87/</url>
+    <title>微服务架构系列（一）-服务注册与发现</title>
+    <url>/2022/02/18/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E7%8E%B0/</url>
     <content><![CDATA[<blockquote>
-<p>在编写代码时常使用且常忽视的性能问题进行总结。这篇文章将持续更新…</p>
+<p>为什么有服务注册与发现？解决了什么问题？如何使用？</p>
 </blockquote>
 <a id="more"></a>
 
-<h2 id="string-和-byte-相互转换"><a href="#string-和-byte-相互转换" class="headerlink" title="string 和 []byte 相互转换"></a>string 和 []byte 相互转换</h2><p>无论是从哪种类型转换到另一种都需要对其中的内容进行拷贝，string 和 []byte 相互转换 也不例外，内存拷贝的性能损耗会随着字符串数组和字节长度的增长而增长，所以在做这种类型转换时一定要注意性能上的问题。</p>
-<p>接下来我们可以使用一些方法来避免这种大批量的拷贝工作，这个方法就是可以绕过类型检查的 unsafe.Pointer</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">str2bytes</span><span class="params">(s <span class="keyword">string</span>)</span> []<span class="title">byte</span></span> &#123;</span><br><span class="line">   x := (*[<span class="number">2</span>]<span class="keyword">uintptr</span>)(unsafe.Pointer(&amp;s))</span><br><span class="line">   b := [<span class="number">3</span>]<span class="keyword">uintptr</span>&#123;x[<span class="number">0</span>], x[<span class="number">1</span>], x[<span class="number">1</span>]&#125;</span><br><span class="line">   <span class="keyword">return</span> *(*[]<span class="keyword">byte</span>)(unsafe.Pointer(&amp;b))</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">bytes2str</span><span class="params">(b []<span class="keyword">byte</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">   <span class="keyword">return</span> *(*<span class="keyword">string</span>)(unsafe.Pointer(&amp;b))</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
-<p>​    </p>
-<h2 id="字符串连接"><a href="#字符串连接" class="headerlink" title="字符串连接"></a>字符串连接</h2><p>字符串连接有很多方法：</p>
-<ol>
-<li>直接通过运算符<code>+</code></li>
-<li>fmt.Sprintf()</li>
-<li>bytes.Buffer{}</li>
+
+<h2 id="为什么有服务注册与发现？解决了什么问题？"><a href="#为什么有服务注册与发现？解决了什么问题？" class="headerlink" title="为什么有服务注册与发现？解决了什么问题？"></a>为什么有服务注册与发现？解决了什么问题？</h2><p>​       服务根据功能进行了划分，各自负责自己的模块；但服务和服务之间还需要通信，服务部署很多台，我们要从中获取一台服务建立通信；如果没有服务注册和发现中间件我们要怎么做呢？大部分的做法可能是将所有服务的地址权重写在配置中，通过类负载均衡算法从中选择一个建立连接到达通信的目的，这么做是没问题的，但这么做方便吗？不方便。首先每次新增或移除一个服务都要更新配置文件，而且这类操作通常会比较频繁。其次如果是用容器部署的话，服务的地址都动态服务，如果还是通过人工进行配置，那对运维一点都不友好。服务注册与发现中间件是什么呢？它其实就是公共的服务，保存服务的注册信息，且必须具备高可用和一致性。服务注册时将信息记录，服务发现时获取注册列表。这不就解决了上面所说的问题。</p>
+<h2 id="使用总结为三步："><a href="#使用总结为三步：" class="headerlink" title="使用总结为三步："></a>使用总结为三步：</h2><ol>
+<li><p>服务提供者（Provider）与中间件服务（etcd、consul等）建立连接；</p>
+</li>
+<li><p>服务提供者向中间件服务注册，供其他服务调用；</p>
+</li>
+<li><p>服务消费者（consumer）从中间件服务发现服务（从服务列表中通过负载均衡算法选取）进行调用；</p>
+</li>
 </ol>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Buffer</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	buffer := bytes.Buffer&#123;&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(s)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	buffer.Grow(n)</span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		buffer.WriteString(s)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> buffer.String()</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-
-<ol start="4">
-<li>strings.Builder{}</li>
-</ol>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Builder</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	builder := strings.Builder&#123;&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(s)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	builder.Grow(n)</span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		builder.WriteString(s)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> builder.String()</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-
-<ol start="5">
-<li>copy方法</li>
-</ol>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Copy</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	<span class="keyword">switch</span> <span class="built_in">len</span>(str) &#123;</span><br><span class="line">	<span class="keyword">case</span> <span class="number">0</span>:</span><br><span class="line">		<span class="keyword">return</span> <span class="string">&quot;&quot;</span></span><br><span class="line">	<span class="keyword">case</span> <span class="number">1</span>:</span><br><span class="line">		<span class="keyword">return</span> str[<span class="number">0</span>]</span><br><span class="line">	&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(Str2Bytes(s))</span><br><span class="line">	&#125;</span><br><span class="line">	bytes := <span class="built_in">make</span>([]<span class="keyword">byte</span>, n)</span><br><span class="line">	c := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		c += <span class="built_in">copy</span>(bytes[c:], Str2Bytes(s))</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> Bytes2Str(bytes)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<p>既然方法有这么多种，性能问题就会有差异，通过benchmark测试查看一下:</p>
-<p><img src="/images/benchmark-2022021101.png" alt="benchmark-2022021101"></p>
-<p>可以看出copy和strings.Builder性能上是最好的，fmt.Sprintf是最差的，为什么呢？要知道golang 里面的字符串都是不可变的，每次运算都会产生一个新的字符串，所以会产生很多临时的无用的字符串，不仅没有用，还会给 gc 带来额外的负担，所以性能变差。而copy和strings.Builder根据长度预先分配内存，没有产生很多临时的无用的字符串。本质上就是以空间换时间。</p>
-<h2 id="json序列化"><a href="#json序列化" class="headerlink" title="json序列化"></a>json序列化</h2><p>json系列我们最常用的就是标准库里的encoding/json，但为提高性能可以使用一些第三方库替换。如json-iterator、easyjson等。</p>
-<p>性能提升多少呢？我们通过banchmark测试看一下:</p>
-<p><img src="/images/benchmark-2022021102.png" alt="benchmark-2022021101"></p>
-<p>可以看到json-iterator和easyjson相比easyjson提升整整一倍。但第三方库有一定的维护成本，但数据量大的时候，使用第三方库也是值得的。</p>
+<h2 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h2><p>​       打算写一个服务架构练练手，尽量功能齐全，集成所有市面上使用广泛的中间件。其实现在已经提出了服务网格（Service Mesh，已经有机会也会写写），相当于剥离了业务层和管理层，写代码只需要关注业务，无需关心基础设施层。但我为什么还要回过头去写老的服务机构呢？没为什么，就是学习，你写代码的时候也从来没去看过源码，但面试官就是爱问一个道理。</p>
 ]]></content>
       <categories>
-        <category>Golang</category>
+        <category>微服务架构</category>
       </categories>
       <tags>
-        <tag>Golang</tag>
-        <tag>json</tag>
-        <tag>string</tag>
+        <tag>etcd</tag>
+        <tag>consul</tag>
       </tags>
   </entry>
   <entry>
-    <title>RPC系列（一）-RPC与RUST比较</title>
-    <url>/2021/07/06/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-RPC%E4%B8%8ERUST%E6%AF%94%E8%BE%83/</url>
+    <title>RPC系列（二）-gRPC入门</title>
+    <url>/2021/07/08/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%BA%8C%EF%BC%89-gRPC%E5%85%A5%E9%97%A8/</url>
     <content><![CDATA[<blockquote>
-<p>本篇文章主要介绍RPC是什么，RPC的具体过程，RPC和RUST的比较以及如何选择。</p>
+<p>简单介绍gRPC和ProtoBuf，以及gRPC和ProtoBuf的安装和简单使用，并用golang实现简单RPC服务。</p>
 </blockquote>
 <a id="more"></a>
 
-<h2 id="RPC是什么"><a href="#RPC是什么" class="headerlink" title="RPC是什么"></a>RPC是什么</h2><p>RPC(Remote Procedure Call)是远程过程调用的简称。主要目的就是一个应用调用另一个应用的方法，调用方通过调用代理方法的形式调用被调用方的实现方法。调用协议常包括通信协议和序列化协议。底层的通信协议可以是HTTP、TCP等，根据不同的RPC框架而定。序列化协议常用ProtoBuf协议。</p>
-<h2 id="RPC具体过程"><a href="#RPC具体过程" class="headerlink" title="RPC具体过程"></a>RPC具体过程</h2><p><img src="/images/rpc%E5%85%B7%E4%BD%93%E6%B5%81%E7%A8%8B.png" alt="rpc具体流程"></p>
-<h2 id="RPC和RUST比较"><a href="#RPC和RUST比较" class="headerlink" title="RPC和RUST比较"></a>RPC和RUST比较</h2><p>RUST是基于HTTP协议的RESTFul API设计风格的通信方式，也常用于应用之间的信息通信。但设计理念和底层原理是完全不同的。</p>
-<p>HTTP+Rustful的优点是可读性好，支持跨语言。在运用之间通信的使用超越RPC。但缺点也很明显，HTTP是第七层协议，报文包含大量头部信息，有用信息占比少，因此效率和速度较低。另外使用HTTP协议调用接口封装封装，常需要封装很多参数以及校验方法。RPC则更好与其互补，但牺牲可读性来通过效率和性能是可取的。具体怎么选，需根据业务来，灵活站位。</p>
-<h2 id="RPC使用场景"><a href="#RPC使用场景" class="headerlink" title="RPC使用场景"></a>RPC使用场景</h2><p>Rustful常用于与第三方系统之间的信息通信，通过对外调用的接口。</p>
-<p>RPC常用于自家系统之间的互相调用，更安全高效。</p>
+<h2 id="gRPC简介"><a href="#gRPC简介" class="headerlink" title="gRPC简介"></a>gRPC简介</h2><p><a href="https://grpc.io/">gRPC</a> 是由Google开发的远程过程调用开源框架，支持多种开发语言，且支持跨语言通信。是基于HTTP2通信协议标准设计开发,默认采用Protocol Buffers数据序列化协议。</p>
+<h3 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">go get google.golang.org&#x2F;grpc</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">go install google.golang.org&#x2F;protobuf&#x2F;cmd&#x2F;protoc-gen-go</span><br><span class="line">go install google.golang.org&#x2F;grpc&#x2F;cmd&#x2F;protoc-gen-go-grpc</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="ProtoBuf简介"><a href="#ProtoBuf简介" class="headerlink" title="ProtoBuf简介"></a>ProtoBuf简介</h2><p>gRPC跨语言的支持都是通过<code>Protocol Buffers</code>这个东西，它是一个代码生成工具以及序列化工具。它可以把我们定义好的方法和数据结构转化成指定语言的代码。同时能将我们请求和响应的数据编码成gRPC能传输的形式，又能将数据序列化和反序列化成该语言能处理的形式。</p>
+<h3 id="安装-1"><a href="#安装-1" class="headerlink" title="安装"></a>安装</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">brew info protobuf</span><br></pre></td></tr></table></figure>
+
+<h3 id="使用命令"><a href="#使用命令" class="headerlink" title="使用命令"></a>使用命令</h3><p>这里不整理Protobuf文件的语法，<a href="http://www.topgoer.com/%E5%BE%AE%E6%9C%8D%E5%8A%A1/gRPC/Protobuf%E8%AF%AD%E6%B3%95.html">Protobuf语法</a>看这里。</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">protoc -I&#x3D;$SRC_DIR --go_out&#x3D;$DST_DIR $SRC_DIR&#x2F;fileName.proto</span><br><span class="line"></span><br><span class="line">protoc -I&#x3D;$SRC_DIR --go-grpc_out&#x3D;$DST_DIR $SRC_DIR&#x2F;fileName.proto</span><br></pre></td></tr></table></figure>
+
+<p>$SRC_DIR : 待编译的proto文件所在目录</p>
+<p>$DST_DIR：生成后的代码所存放的目录</p>
+<h2 id="简单示例"><a href="#简单示例" class="headerlink" title="简单示例"></a>简单示例</h2><h3 id="First-proto文件编写和生成源码"><a href="#First-proto文件编写和生成源码" class="headerlink" title="First: proto文件编写和生成源码"></a>First: proto文件编写和生成源码</h3><p>proto文件书写，先定义该通信用到的数据类型和结构，请求和响应的数据模型。</p>
+<figure class="highlight protobuf"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">message</span> <span class="title">Massage</span> </span>&#123;</span><br><span class="line">  <span class="built_in">string</span> request = <span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>再定义该通信的方法，只需要定义方法名、请求参数、响应参数即可。</p>
+<figure class="highlight protobuf"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">service</span> <span class="title">HelloService</span></span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">rpc</span> Hello(Massage) <span class="keyword">returns</span> (Massage)</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>通过protoc命名生成指定语言的代码，这里是生成go语言的代码。</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">protoc --go_out=. massage.proto</span><br><span class="line">protoc --go-grpc_out=. massage.proto</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="Second-Server代码编写"><a href="#Second-Server代码编写" class="headerlink" title="Second: Server代码编写"></a>Second: Server代码编写</h3><p>HelloService方法的具体实现，这里简单实现。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(h *helloService)</span> <span class="title">Hello</span><span class="params">(c context.Context, requestMessage *protobuf.Massage)</span> <span class="params">(responseMessage *protobuf.Massage, err error)</span></span> &#123;</span><br><span class="line">	msg := <span class="string">&quot;hello &quot;</span> + requestMessage.Request</span><br><span class="line">	responseMessage = &amp;protobuf.Massage&#123;Request: msg&#125;</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>创建rpc服务，注册通信方法的具体实现。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">server := grpc.NewServer()</span><br><span class="line">protobuf.RegisterHelloServiceServer(server, &amp;service.HelloService)</span><br></pre></td></tr></table></figure>
+
+<p>监听端口，至此简单的rpc服务就写完了。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">listen, err := net.Listen(<span class="string">&quot;tcp&quot;</span>, <span class="string">&quot;localhost:9000&quot;</span>)</span><br><span class="line">err = server.Serve(listen)</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="Third：Client代码编写"><a href="#Third：Client代码编写" class="headerlink" title="Third：Client代码编写"></a>Third：Client代码编写</h3><p>创建rpc客户端，建立连接。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">conn, err := grpc.Dial(<span class="string">&quot;localhost:9000&quot;</span>, grpc.WithInsecure())</span><br><span class="line">c := protobuf.NewHelloServiceClient(conn)</span><br></pre></td></tr></table></figure>
+
+<p>发送请求信息以及读取响应信息。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line">requestMessage := &amp;protobuf.Massage&#123;Request: <span class="string">&quot;world &quot;</span>&#125;</span><br><span class="line">responseMessage, err := c.Hello(context.Background(), requestMessage)</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
+
+
+
 ]]></content>
       <categories>
-        <category>RPC</category>
+        <category>gRPC</category>
       </categories>
       <tags>
+        <tag>Golang</tag>
         <tag>RPC</tag>
-        <tag>RUST</tag>
-        <tag>Rustful</tag>
+        <tag>gRPC</tag>
+        <tag>ProtoBuf</tag>
       </tags>
   </entry>
 </search>
