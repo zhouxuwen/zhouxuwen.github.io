@@ -1,6 +1,90 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title>Golang性能优化篇</title>
+    <url>/2022/02/11/Golang%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%AF%87/</url>
+    <content><![CDATA[<blockquote>
+<p>在编写代码时常使用且常忽视的性能问题进行总结。这篇文章将持续更新…</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="string-和-byte-相互转换"><a href="#string-和-byte-相互转换" class="headerlink" title="string 和 []byte 相互转换"></a>string 和 []byte 相互转换</h2><p>无论是从哪种类型转换到另一种都需要对其中的内容进行拷贝，string 和 []byte 相互转换 也不例外，内存拷贝的性能损耗会随着字符串数组和字节长度的增长而增长，所以在做这种类型转换时一定要注意性能上的问题。</p>
+<p>接下来我们可以使用一些方法来避免这种大批量的拷贝工作，这个方法就是可以绕过类型检查的 unsafe.Pointer</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">str2bytes</span><span class="params">(s <span class="keyword">string</span>)</span> []<span class="title">byte</span></span> &#123;</span><br><span class="line">   x := (*[<span class="number">2</span>]<span class="keyword">uintptr</span>)(unsafe.Pointer(&amp;s))</span><br><span class="line">   b := [<span class="number">3</span>]<span class="keyword">uintptr</span>&#123;x[<span class="number">0</span>], x[<span class="number">1</span>], x[<span class="number">1</span>]&#125;</span><br><span class="line">   <span class="keyword">return</span> *(*[]<span class="keyword">byte</span>)(unsafe.Pointer(&amp;b))</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">bytes2str</span><span class="params">(b []<span class="keyword">byte</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">   <span class="keyword">return</span> *(*<span class="keyword">string</span>)(unsafe.Pointer(&amp;b))</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    </p>
+<h2 id="字符串连接"><a href="#字符串连接" class="headerlink" title="字符串连接"></a>字符串连接</h2><p>字符串连接有很多方法：</p>
+<ol>
+<li>直接通过运算符<code>+</code></li>
+<li>fmt.Sprintf()</li>
+<li>bytes.Buffer{}</li>
+</ol>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Buffer</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	buffer := bytes.Buffer&#123;&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(s)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	buffer.Grow(n)</span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		buffer.WriteString(s)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> buffer.String()</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<ol start="4">
+<li>strings.Builder{}</li>
+</ol>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Builder</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	builder := strings.Builder&#123;&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(s)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	builder.Grow(n)</span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		builder.WriteString(s)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> builder.String()</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<ol start="5">
+<li>copy方法</li>
+</ol>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Copy</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	<span class="keyword">switch</span> <span class="built_in">len</span>(str) &#123;</span><br><span class="line">	<span class="keyword">case</span> <span class="number">0</span>:</span><br><span class="line">		<span class="keyword">return</span> <span class="string">&quot;&quot;</span></span><br><span class="line">	<span class="keyword">case</span> <span class="number">1</span>:</span><br><span class="line">		<span class="keyword">return</span> str[<span class="number">0</span>]</span><br><span class="line">	&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(Str2Bytes(s))</span><br><span class="line">	&#125;</span><br><span class="line">	bytes := <span class="built_in">make</span>([]<span class="keyword">byte</span>, n)</span><br><span class="line">	c := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		c += <span class="built_in">copy</span>(bytes[c:], Str2Bytes(s))</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> Bytes2Str(bytes)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<p>既然方法有这么多种，性能问题就会有差异，通过benchmark测试查看一下:</p>
+<p><img src="/images/benchmark-2022021101.png" alt="benchmark-2022021101"></p>
+<p>可以看出copy和strings.Builder性能上是最好的，fmt.Sprintf是最差的，为什么呢？要知道golang 里面的字符串都是不可变的，每次运算都会产生一个新的字符串，所以会产生很多临时的无用的字符串，不仅没有用，还会给 gc 带来额外的负担，所以性能变差。而copy和strings.Builder根据长度预先分配内存，没有产生很多临时的无用的字符串。本质上就是以空间换时间。</p>
+<h2 id="json序列化"><a href="#json序列化" class="headerlink" title="json序列化"></a>json序列化</h2><p>json系列我们最常用的就是标准库里的encoding/json，但为提高性能可以使用一些第三方库替换。如json-iterator、easyjson等。</p>
+<p>性能提升多少呢？我们通过banchmark测试看一下:</p>
+<p><img src="/images/benchmark-2022021102.png" alt="benchmark-2022021101"></p>
+<p>可以看到json-iterator和easyjson相比easyjson提升整整一倍。但第三方库有一定的维护成本，但数据量大的时候，使用第三方库也是值得的。</p>
+]]></content>
+      <categories>
+        <category>Golang</category>
+      </categories>
+      <tags>
+        <tag>Golang</tag>
+        <tag>json</tag>
+        <tag>string</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Golang系列（一）-context使用</title>
+    <url>/2021/07/12/Golang%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-context/</url>
+    <content><![CDATA[<blockquote>
+<p>go的context包详解，context中文翻译过来叫“上下文”，本篇文章讲一下它具体的作用是什么。你在什么情况下可以用到它。</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="引言"><a href="#引言" class="headerlink" title="引言"></a>引言</h2><p>http server 常为每个请求创建一个 goroutine 以并发地处理请求，同时这个 goroutine 又会创建更多的 gotoutine 来访问数据库和缓存或RPC服务，当请求结束或被终止，能释放所有 gotoutine的资源。因此就需要一种机制，在goroutine之间传递信号消息。</p>
+<h2 id="简介"><a href="#简介" class="headerlink" title="简介"></a>简介</h2><p>context 中文翻译过来叫”上下文“，常被用来 goroutine 之间传递信息和信号的。信息和信号包括截至时间（deadline)，取消信号(cancellation signals) 以及跨边界需要往下传递的键值对信息。</p>
+<h2 id="特性"><a href="#特性" class="headerlink" title="特性"></a>特性</h2><ul>
+<li>context的设计是可通过已有Context进行树型派生，已管理一组过程的生命周期。单Context是不可变的，但可以通过WithValue、WithCancel、WithTimeout方法进行派生并附加一些属性（键值、可取消、时限），以构建一组树型组织的context。</li>
+<li>当根 Context 结束时，所有由其派生出的 Context 也会被一并取消。也就是说，父 Context 的生命周期涵盖所有子 Context 的生命周期。</li>
+</ul>
+<h2 id="使用"><a href="#使用" class="headerlink" title="使用"></a>使用</h2><h3 id="创建根Context"><a href="#创建根Context" class="headerlink" title="创建根Context"></a>创建根Context</h3><p><code>context.Background() </code>创建一个空的Context（not nil), 常用作初始化创建根Context。</p>
+<h3 id="派生携带键值信息Context"><a href="#派生携带键值信息Context" class="headerlink" title="派生携带键值信息Context"></a>派生携带键值信息Context</h3><p><code>context.WithValue(parentContext, key, value)</code> 在父节点Context的基础上创建一个新的携带键值信息的的子节点Context。</p>
+<h3 id="派生可取消Context"><a href="#派生可取消Context" class="headerlink" title="派生可取消Context"></a>派生可取消Context</h3><p><code>context.WithCancel(parentContext) </code>在父节点Context的基础上创建一个新的可取消的子节点Context，返回新创建的子节点Context和取消方法cancelFunc。</p>
+<h3 id="派生有时间限制Context"><a href="#派生有时间限制Context" class="headerlink" title="派生有时间限制Context"></a>派生有时间限制Context</h3><p><code>context.WithTimeout(parentContext，timeout)</code>在父节点Context的基础上创建新的有时间限制的子节点Context，返回新创建子节点Context和取消方法cancelFunc。超过时间限制后，该Conext会发送信号到Done通道，所有子节点检测到信号立即退出。</p>
+<h3 id="派生有截至时间Context"><a href="#派生有截至时间Context" class="headerlink" title="派生有截至时间Context"></a>派生有截至时间Context</h3><p><code>context.WithDeadline(parentContext, time)</code>在父节点Context的基础上创建新的有截至时间的子节点Context,返回新创建子节点Context和取消方法cancelFunc。<code>context.Timeout(parentContext，timeout)</code>等价于<code>context.Deadline(parentContext,time.Now().Add(timeout))</code>。</p>
+<p>​    </p>
+<h2 id="注意"><a href="#注意" class="headerlink" title="注意"></a>注意</h2><ul>
+<li>Background 创建的根节点没有时限，也不能取消。</li>
+<li>WithCancel、WithTimeout、WithDeadline方法是从父context派生出新的context，新的context受限与父context的生命周期。新context应注意在对应过程结束后及时cancel，以防止goroutine泄露。</li>
+<li>不能使用nil Context，尽管语法上允许。不知道使用什么值合适时，可以使用 <code>context.TODO()</code>。</li>
+</ul>
+]]></content>
+      <categories>
+        <category>Golang</category>
+      </categories>
+      <tags>
+        <tag>Golang</tag>
+        <tag>context</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>RPC系列（一）-RPC与RUST比较</title>
     <url>/2021/07/06/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-RPC%E4%B8%8ERUST%E6%AF%94%E8%BE%83/</url>
     <content><![CDATA[<blockquote>
@@ -84,60 +168,79 @@
         <category>gRPC</category>
       </categories>
       <tags>
+        <tag>Golang</tag>
         <tag>RPC</tag>
         <tag>gRPC</tag>
         <tag>ProtoBuf</tag>
-        <tag>Golang</tag>
       </tags>
   </entry>
   <entry>
-    <title>Golang性能优化篇</title>
-    <url>/2022/02/11/Golang%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%AF%87/</url>
+    <title>RPC序列（三）-gRPC安全认证</title>
+    <url>/2021/07/15/RPC%E5%BA%8F%E5%88%97%EF%BC%88%E4%B8%89%EF%BC%89-gRPC%E5%AE%89%E5%85%A8%E8%AE%A4%E8%AF%81/</url>
     <content><![CDATA[<blockquote>
-<p>在编写代码时常使用且常忽视的性能问题进行总结。这篇文章将持续更新…</p>
+<p>未认证的RPC服务可能导致服务被攻击、注入恶意数据、数据泄露等安全问题。gRPC框架自带的两种安全认证方式，这里简单介绍这两种认证方式，并用Golang进行简单实现。</p>
 </blockquote>
 <a id="more"></a>
 
-<h2 id="string-和-byte-相互转换"><a href="#string-和-byte-相互转换" class="headerlink" title="string 和 []byte 相互转换"></a>string 和 []byte 相互转换</h2><p>无论是从哪种类型转换到另一种都需要对其中的内容进行拷贝，string 和 []byte 相互转换 也不例外，内存拷贝的性能损耗会随着字符串数组和字节长度的增长而增长，所以在做这种类型转换时一定要注意性能上的问题。</p>
-<p>接下来我们可以使用一些方法来避免这种大批量的拷贝工作，这个方法就是可以绕过类型检查的 unsafe.Pointer</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">str2bytes</span><span class="params">(s <span class="keyword">string</span>)</span> []<span class="title">byte</span></span> &#123;</span><br><span class="line">   x := (*[<span class="number">2</span>]<span class="keyword">uintptr</span>)(unsafe.Pointer(&amp;s))</span><br><span class="line">   b := [<span class="number">3</span>]<span class="keyword">uintptr</span>&#123;x[<span class="number">0</span>], x[<span class="number">1</span>], x[<span class="number">1</span>]&#125;</span><br><span class="line">   <span class="keyword">return</span> *(*[]<span class="keyword">byte</span>)(unsafe.Pointer(&amp;b))</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">bytes2str</span><span class="params">(b []<span class="keyword">byte</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">   <span class="keyword">return</span> *(*<span class="keyword">string</span>)(unsafe.Pointer(&amp;b))</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="认证"><a href="#认证" class="headerlink" title="认证"></a>认证</h2><p>gRPC内置两种认证方式：</p>
+<ul>
+<li>SSL/TLS认证方式</li>
+<li>自定义认证方式</li>
+</ul>
+<h3 id="SSL-TLS认证"><a href="#SSL-TLS认证" class="headerlink" title="SSL/TLS认证"></a>SSL/TLS认证</h3><p>什么是SSL/TLS呢？SSL是安全套接字层(secure sockets layer),TLS是传输层安全 (transport layer security)，就是在应用层和TCP层之间新加一层加密，这样可以保证信息传输的安全性。</p>
+<h4 id="制作TLS证书"><a href="#制作TLS证书" class="headerlink" title="制作TLS证书"></a>制作TLS证书</h4><p>通过OpenSSL工具生成私钥，加密方式RSA，密码大小2048位。</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">$ openssl genrsa -out server.key 2048</span><br></pre></td></tr></table></figure>
 
-<p>​    </p>
-<h2 id="字符串连接"><a href="#字符串连接" class="headerlink" title="字符串连接"></a>字符串连接</h2><p>字符串连接有很多方法：</p>
+<p>使用私钥生成自签名的证书文件</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">openssl req -new -x509 -sha256 -key server.key -out server.pem -days 3650</span><br></pre></td></tr></table></figure>
+
+<p>填入证书自定义信息，注意<code>server name </code>填写的内容，后面会用到。</p>
+<h4 id="示例项目"><a href="#示例项目" class="headerlink" title="示例项目"></a>示例项目</h4><h5 id="First-server添加TLS认证"><a href="#First-server添加TLS认证" class="headerlink" title="First: server添加TLS认证"></a>First: server添加TLS认证</h5><p>通过密钥和刚刚制作的证书生成服务端传输证书。部分代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// TLS认证</span></span><br><span class="line">creds, err := credentials.NewServerTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;./keys/server.key&quot;</span> <span class="comment">/*制作证书存放路径*/</span>)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line">server := grpc.NewServer(grpc.Creds(creds))</span><br></pre></td></tr></table></figure>
+
+<h5 id="Second-client添加TLS认证"><a href="#Second-client添加TLS认证" class="headerlink" title="Second: client添加TLS认证"></a>Second: client添加TLS认证</h5><p>通过制作的证书生成客户端传输证书。部分代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// TLS认证</span></span><br><span class="line">creds, err := credentials.NewClientTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;server name&quot;</span> <span class="comment">/*制作证书时的server name*/</span>)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line">conn, err := grpc.Dial(<span class="string">&quot;localhost:9000&quot;</span>, grpc.WithTransportCredentials(creds))</span><br></pre></td></tr></table></figure>
+
+<p>到这里gRPC的TLS单向认证的简单实现就完成了。</p>
+<h3 id="自定义Token认证"><a href="#自定义Token认证" class="headerlink" title="自定义Token认证"></a>自定义Token认证</h3><p>通过自定义的身份认证方式进行认证客户端是否有权限。简单理解就是处理请求前对请求的内容进行身份认证。</p>
+<h4 id="示例项目-1"><a href="#示例项目-1" class="headerlink" title="示例项目"></a>示例项目</h4><h5 id="First-server添加鉴权拦截器"><a href="#First-server添加鉴权拦截器" class="headerlink" title="First: server添加鉴权拦截器"></a>First: server添加鉴权拦截器</h5><p>新增鉴权拦截器，示例代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Interceptor</span><span class="params">(ctx context.Context, req <span class="keyword">interface</span>&#123;&#125;, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">	err := Auth(ctx)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 继续处理请求</span></span><br><span class="line">	<span class="keyword">return</span> handler(ctx, req)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Auth</span><span class="params">(ctx context.Context)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	md, ok := metadata.FromIncomingContext(ctx)</span><br><span class="line">	<span class="keyword">if</span> !ok &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;无Token认证信息&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// authentication</span></span><br><span class="line">	val := md.Get(<span class="string">&quot;app_id&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(val) &lt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;app_id is empty&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	appID := val[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">	val = md.Get(<span class="string">&quot;secret_key&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(val) &lt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;secret_key is empty&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	appKey := val[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 简单模拟鉴权方式</span></span><br><span class="line">	<span class="keyword">if</span> _, ok := tokenMap[appID]; !ok || appKey != tokenMap[appID] &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;unauthorized&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>将鉴权拦截器加入服务选项，代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// token auth</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.UnaryInterceptor(interceptor.Interceptor))</span><br><span class="line"></span><br><span class="line"><span class="comment">// rpc server</span></span><br><span class="line">server := grpc.NewServer(opts...)</span><br></pre></td></tr></table></figure>
+
+
+
+<h5 id="second-client添加身份认证请求参数"><a href="#second-client添加身份认证请求参数" class="headerlink" title="second: client添加身份认证请求参数"></a>second: client添加身份认证请求参数</h5><h6 id="方式一：实现PerRPCCredentials接口"><a href="#方式一：实现PerRPCCredentials接口" class="headerlink" title="方式一：实现PerRPCCredentials接口"></a>方式一：实现PerRPCCredentials接口</h6><p>该接口有两个方法</p>
 <ol>
-<li>直接通过运算符<code>+</code></li>
-<li>fmt.Sprintf()</li>
-<li>bytes.Buffer{}</li>
+<li><code>GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) </code> 返回请求的身份认证数据。</li>
+<li><code>RequireTransportSecurity() bool </code>返回是否开启TLS认证</li>
 </ol>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Buffer</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	buffer := bytes.Buffer&#123;&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(s)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	buffer.Grow(n)</span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		buffer.WriteString(s)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> buffer.String()</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">type</span> authCredential <span class="keyword">struct</span>&#123;&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(*authCredential)</span> <span class="title">GetRequestMetadata</span><span class="params">(ctx context.Context, uri ...<span class="keyword">string</span>)</span> <span class="params">(<span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>, error)</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>&#123;<span class="string">&quot;app_id&quot;</span>:<span class="string">&quot;123456&quot;</span>,<span class="string">&quot;secret_key&quot;</span>:<span class="string">&quot;key&quot;</span>&#125;, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(*authCredential)</span> 	<span class="title">RequireTransportSecurity</span><span class="params">()</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
-<ol start="4">
-<li>strings.Builder{}</li>
-</ol>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Builder</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	builder := strings.Builder&#123;&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(s)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	builder.Grow(n)</span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		builder.WriteString(s)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> builder.String()</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-
-<ol start="5">
-<li>copy方法</li>
-</ol>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Copy</span><span class="params">(str ...<span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	<span class="keyword">switch</span> <span class="built_in">len</span>(str) &#123;</span><br><span class="line">	<span class="keyword">case</span> <span class="number">0</span>:</span><br><span class="line">		<span class="keyword">return</span> <span class="string">&quot;&quot;</span></span><br><span class="line">	<span class="keyword">case</span> <span class="number">1</span>:</span><br><span class="line">		<span class="keyword">return</span> str[<span class="number">0</span>]</span><br><span class="line">	&#125;</span><br><span class="line">	n := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		n += <span class="built_in">len</span>(Str2Bytes(s))</span><br><span class="line">	&#125;</span><br><span class="line">	bytes := <span class="built_in">make</span>([]<span class="keyword">byte</span>, n)</span><br><span class="line">	c := <span class="number">0</span></span><br><span class="line">	<span class="keyword">for</span> _, s := <span class="keyword">range</span> str &#123;</span><br><span class="line">		c += <span class="built_in">copy</span>(bytes[c:], Str2Bytes(s))</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> Bytes2Str(bytes)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>然后将该自定义认证加入到客户端选项中：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 自定义认证方式</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.WithPerRPCCredentials(<span class="built_in">new</span>(authCredential)))</span><br><span class="line"></span><br></pre></td></tr></table></figure>
 
 
 
-<p>既然方法有这么多种，性能问题就会有差异，通过benchmark测试查看一下:</p>
-<p><img src="/images/benchmark-2022021101.png" alt="benchmark-2022021101"></p>
-<p>可以看出copy和strings.Builder性能上是最好的，fmt.Sprintf是最差的，为什么呢？要知道golang 里面的字符串都是不可变的，每次运算都会产生一个新的字符串，所以会产生很多临时的无用的字符串，不仅没有用，还会给 gc 带来额外的负担，所以性能变差。而copy和strings.Builder根据长度预先分配内存，没有产生很多临时的无用的字符串。本质上就是以空间换时间。</p>
-<h2 id="json序列化"><a href="#json序列化" class="headerlink" title="json序列化"></a>json序列化</h2><p>json系列我们最常用的就是标准库里的encoding/json，但为提高性能可以使用一些第三方库替换。如json-iterator、easyjson等。</p>
-<p>性能提升多少呢？我们通过banchmark测试看一下:</p>
-<p><img src="/images/benchmark-2022021102.png" alt="benchmark-2022021101"></p>
-<p>可以看到json-iterator和easyjson相比easyjson提升整整一倍。但第三方库有一定的维护成本，但数据量大的时候，使用第三方库也是值得的。</p>
+<h6 id="方式二：context添加元数据"><a href="#方式二：context添加元数据" class="headerlink" title="方式二：context添加元数据"></a>方式二：context添加元数据</h6><p>请求方法的context添加身份认证元数据。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 认证参数</span></span><br><span class="line">md := metadata.Pairs(<span class="string">&quot;app_id&quot;</span>, <span class="string">&quot;123456&quot;</span>, <span class="string">&quot;secret_key&quot;</span>, <span class="string">&quot;secret_key&quot;</span>)</span><br><span class="line">ctx := metadata.NewOutgoingContext(context.Background(), md)</span><br><span class="line"></span><br><span class="line"><span class="comment">// todo </span></span><br><span class="line"><span class="comment">// resp := client.Function(ctx, reqMsg...)</span></span><br></pre></td></tr></table></figure>
+
+<p>到这自定义身份认证的简单实现就完成了。</p>
+<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
+
+
+
+
+
 ]]></content>
       <categories>
-        <category>Golang</category>
+        <category>gRPC</category>
       </categories>
       <tags>
-        <tag>Golang</tag>
-        <tag>json</tag>
-        <tag>string</tag>
+        <tag>RPC</tag>
+        <tag>gRPC</tag>
+        <tag>SSL/TLS</tag>
       </tags>
   </entry>
   <entry>
@@ -283,40 +386,6 @@
       </tags>
   </entry>
   <entry>
-    <title>Golang系列（一）-context使用</title>
-    <url>/2021/07/12/Golang%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-context/</url>
-    <content><![CDATA[<blockquote>
-<p>go的context包详解，context中文翻译过来叫“上下文”，本篇文章讲一下它具体的作用是什么。你在什么情况下可以用到它。</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="引言"><a href="#引言" class="headerlink" title="引言"></a>引言</h2><p>http server 常为每个请求创建一个 goroutine 以并发地处理请求，同时这个 goroutine 又会创建更多的 gotoutine 来访问数据库和缓存或RPC服务，当请求结束或被终止，能释放所有 gotoutine的资源。因此就需要一种机制，在goroutine之间传递信号消息。</p>
-<h2 id="简介"><a href="#简介" class="headerlink" title="简介"></a>简介</h2><p>context 中文翻译过来叫”上下文“，常被用来 goroutine 之间传递信息和信号的。信息和信号包括截至时间（deadline)，取消信号(cancellation signals) 以及跨边界需要往下传递的键值对信息。</p>
-<h2 id="特性"><a href="#特性" class="headerlink" title="特性"></a>特性</h2><ul>
-<li>context的设计是可通过已有Context进行树型派生，已管理一组过程的生命周期。单Context是不可变的，但可以通过WithValue、WithCancel、WithTimeout方法进行派生并附加一些属性（键值、可取消、时限），以构建一组树型组织的context。</li>
-<li>当根 Context 结束时，所有由其派生出的 Context 也会被一并取消。也就是说，父 Context 的生命周期涵盖所有子 Context 的生命周期。</li>
-</ul>
-<h2 id="使用"><a href="#使用" class="headerlink" title="使用"></a>使用</h2><h3 id="创建根Context"><a href="#创建根Context" class="headerlink" title="创建根Context"></a>创建根Context</h3><p><code>context.Background() </code>创建一个空的Context（not nil), 常用作初始化创建根Context。</p>
-<h3 id="派生携带键值信息Context"><a href="#派生携带键值信息Context" class="headerlink" title="派生携带键值信息Context"></a>派生携带键值信息Context</h3><p><code>context.WithValue(parentContext, key, value)</code> 在父节点Context的基础上创建一个新的携带键值信息的的子节点Context。</p>
-<h3 id="派生可取消Context"><a href="#派生可取消Context" class="headerlink" title="派生可取消Context"></a>派生可取消Context</h3><p><code>context.WithCancel(parentContext) </code>在父节点Context的基础上创建一个新的可取消的子节点Context，返回新创建的子节点Context和取消方法cancelFunc。</p>
-<h3 id="派生有时间限制Context"><a href="#派生有时间限制Context" class="headerlink" title="派生有时间限制Context"></a>派生有时间限制Context</h3><p><code>context.WithTimeout(parentContext，timeout)</code>在父节点Context的基础上创建新的有时间限制的子节点Context，返回新创建子节点Context和取消方法cancelFunc。超过时间限制后，该Conext会发送信号到Done通道，所有子节点检测到信号立即退出。</p>
-<h3 id="派生有截至时间Context"><a href="#派生有截至时间Context" class="headerlink" title="派生有截至时间Context"></a>派生有截至时间Context</h3><p><code>context.WithDeadline(parentContext, time)</code>在父节点Context的基础上创建新的有截至时间的子节点Context,返回新创建子节点Context和取消方法cancelFunc。<code>context.Timeout(parentContext，timeout)</code>等价于<code>context.Deadline(parentContext,time.Now().Add(timeout))</code>。</p>
-<p>​    </p>
-<h2 id="注意"><a href="#注意" class="headerlink" title="注意"></a>注意</h2><ul>
-<li>Background 创建的根节点没有时限，也不能取消。</li>
-<li>WithCancel、WithTimeout、WithDeadline方法是从父context派生出新的context，新的context受限与父context的生命周期。新context应注意在对应过程结束后及时cancel，以防止goroutine泄露。</li>
-<li>不能使用nil Context，尽管语法上允许。不知道使用什么值合适时，可以使用 <code>context.TODO()</code>。</li>
-</ul>
-]]></content>
-      <categories>
-        <category>Golang</category>
-      </categories>
-      <tags>
-        <tag>Golang</tag>
-        <tag>context</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>微服务架构系列（一）-服务注册与发现（3）</title>
     <url>/2022/03/15/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E7%8E%B0%EF%BC%883%EF%BC%89/</url>
     <content><![CDATA[<blockquote>
@@ -346,75 +415,6 @@
       <tags>
         <tag>etcd</tag>
         <tag>grpc</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>RPC序列（三）-gRPC安全认证</title>
-    <url>/2021/07/15/RPC%E5%BA%8F%E5%88%97%EF%BC%88%E4%B8%89%EF%BC%89-gRPC%E5%AE%89%E5%85%A8%E8%AE%A4%E8%AF%81/</url>
-    <content><![CDATA[<blockquote>
-<p>未认证的RPC服务可能导致服务被攻击、注入恶意数据、数据泄露等安全问题。gRPC框架自带的两种安全认证方式，这里简单介绍这两种认证方式，并用Golang进行简单实现。</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="认证"><a href="#认证" class="headerlink" title="认证"></a>认证</h2><p>gRPC内置两种认证方式：</p>
-<ul>
-<li>SSL/TLS认证方式</li>
-<li>自定义认证方式</li>
-</ul>
-<h3 id="SSL-TLS认证"><a href="#SSL-TLS认证" class="headerlink" title="SSL/TLS认证"></a>SSL/TLS认证</h3><p>什么是SSL/TLS呢？SSL是安全套接字层(secure sockets layer),TLS是传输层安全 (transport layer security)，就是在应用层和TCP层之间新加一层加密，这样可以保证信息传输的安全性。</p>
-<h4 id="制作TLS证书"><a href="#制作TLS证书" class="headerlink" title="制作TLS证书"></a>制作TLS证书</h4><p>通过OpenSSL工具生成私钥，加密方式RSA，密码大小2048位。</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">$ openssl genrsa -out server.key 2048</span><br></pre></td></tr></table></figure>
-
-<p>使用私钥生成自签名的证书文件</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">openssl req -new -x509 -sha256 -key server.key -out server.pem -days 3650</span><br></pre></td></tr></table></figure>
-
-<p>填入证书自定义信息，注意<code>server name </code>填写的内容，后面会用到。</p>
-<h4 id="示例项目"><a href="#示例项目" class="headerlink" title="示例项目"></a>示例项目</h4><h5 id="First-server添加TLS认证"><a href="#First-server添加TLS认证" class="headerlink" title="First: server添加TLS认证"></a>First: server添加TLS认证</h5><p>通过密钥和刚刚制作的证书生成服务端传输证书。部分代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// TLS认证</span></span><br><span class="line">creds, err := credentials.NewServerTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;./keys/server.key&quot;</span> <span class="comment">/*制作证书存放路径*/</span>)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line">server := grpc.NewServer(grpc.Creds(creds))</span><br></pre></td></tr></table></figure>
-
-<h5 id="Second-client添加TLS认证"><a href="#Second-client添加TLS认证" class="headerlink" title="Second: client添加TLS认证"></a>Second: client添加TLS认证</h5><p>通过制作的证书生成客户端传输证书。部分代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// TLS认证</span></span><br><span class="line">creds, err := credentials.NewClientTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;server name&quot;</span> <span class="comment">/*制作证书时的server name*/</span>)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line">conn, err := grpc.Dial(<span class="string">&quot;localhost:9000&quot;</span>, grpc.WithTransportCredentials(creds))</span><br></pre></td></tr></table></figure>
-
-<p>到这里gRPC的TLS单向认证的简单实现就完成了。</p>
-<h3 id="自定义Token认证"><a href="#自定义Token认证" class="headerlink" title="自定义Token认证"></a>自定义Token认证</h3><p>通过自定义的身份认证方式进行认证客户端是否有权限。简单理解就是处理请求前对请求的内容进行身份认证。</p>
-<h4 id="示例项目-1"><a href="#示例项目-1" class="headerlink" title="示例项目"></a>示例项目</h4><h5 id="First-server添加鉴权拦截器"><a href="#First-server添加鉴权拦截器" class="headerlink" title="First: server添加鉴权拦截器"></a>First: server添加鉴权拦截器</h5><p>新增鉴权拦截器，示例代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Interceptor</span><span class="params">(ctx context.Context, req <span class="keyword">interface</span>&#123;&#125;, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">	err := Auth(ctx)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 继续处理请求</span></span><br><span class="line">	<span class="keyword">return</span> handler(ctx, req)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Auth</span><span class="params">(ctx context.Context)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	md, ok := metadata.FromIncomingContext(ctx)</span><br><span class="line">	<span class="keyword">if</span> !ok &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;无Token认证信息&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// authentication</span></span><br><span class="line">	val := md.Get(<span class="string">&quot;app_id&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(val) &lt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;app_id is empty&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	appID := val[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">	val = md.Get(<span class="string">&quot;secret_key&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(val) &lt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;secret_key is empty&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	appKey := val[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 简单模拟鉴权方式</span></span><br><span class="line">	<span class="keyword">if</span> _, ok := tokenMap[appID]; !ok || appKey != tokenMap[appID] &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;unauthorized&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>将鉴权拦截器加入服务选项，代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// token auth</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.UnaryInterceptor(interceptor.Interceptor))</span><br><span class="line"></span><br><span class="line"><span class="comment">// rpc server</span></span><br><span class="line">server := grpc.NewServer(opts...)</span><br></pre></td></tr></table></figure>
-
-
-
-<h5 id="second-client添加身份认证请求参数"><a href="#second-client添加身份认证请求参数" class="headerlink" title="second: client添加身份认证请求参数"></a>second: client添加身份认证请求参数</h5><h6 id="方式一：实现PerRPCCredentials接口"><a href="#方式一：实现PerRPCCredentials接口" class="headerlink" title="方式一：实现PerRPCCredentials接口"></a>方式一：实现PerRPCCredentials接口</h6><p>该接口有两个方法</p>
-<ol>
-<li><code>GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) </code> 返回请求的身份认证数据。</li>
-<li><code>RequireTransportSecurity() bool </code>返回是否开启TLS认证</li>
-</ol>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">type</span> authCredential <span class="keyword">struct</span>&#123;&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(*authCredential)</span> <span class="title">GetRequestMetadata</span><span class="params">(ctx context.Context, uri ...<span class="keyword">string</span>)</span> <span class="params">(<span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>, error)</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>&#123;<span class="string">&quot;app_id&quot;</span>:<span class="string">&quot;123456&quot;</span>,<span class="string">&quot;secret_key&quot;</span>:<span class="string">&quot;key&quot;</span>&#125;, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(*authCredential)</span> 	<span class="title">RequireTransportSecurity</span><span class="params">()</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>然后将该自定义认证加入到客户端选项中：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 自定义认证方式</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.WithPerRPCCredentials(<span class="built_in">new</span>(authCredential)))</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-
-
-
-<h6 id="方式二：context添加元数据"><a href="#方式二：context添加元数据" class="headerlink" title="方式二：context添加元数据"></a>方式二：context添加元数据</h6><p>请求方法的context添加身份认证元数据。</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 认证参数</span></span><br><span class="line">md := metadata.Pairs(<span class="string">&quot;app_id&quot;</span>, <span class="string">&quot;123456&quot;</span>, <span class="string">&quot;secret_key&quot;</span>, <span class="string">&quot;secret_key&quot;</span>)</span><br><span class="line">ctx := metadata.NewOutgoingContext(context.Background(), md)</span><br><span class="line"></span><br><span class="line"><span class="comment">// todo </span></span><br><span class="line"><span class="comment">// resp := client.Function(ctx, reqMsg...)</span></span><br></pre></td></tr></table></figure>
-
-<p>到这自定义身份认证的简单实现就完成了。</p>
-<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
-
-
-
-
-
-]]></content>
-      <categories>
-        <category>gRPC</category>
-      </categories>
-      <tags>
-        <tag>RPC</tag>
-        <tag>gRPC</tag>
-        <tag>SSL/TLS</tag>
       </tags>
   </entry>
 </search>
