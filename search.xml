@@ -1,40 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
-    <title>Golang系列（一）-context使用</title>
-    <url>/2021/07/12/Golang%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-context/</url>
-    <content><![CDATA[<blockquote>
-<p>go的context包详解，context中文翻译过来叫“上下文”，本篇文章讲一下它具体的作用是什么。你在什么情况下可以用到它。</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="引言"><a href="#引言" class="headerlink" title="引言"></a>引言</h2><p>http server 常为每个请求创建一个 goroutine 以并发地处理请求，同时这个 goroutine 又会创建更多的 gotoutine 来访问数据库和缓存或RPC服务，当请求结束或被终止，能释放所有 gotoutine的资源。因此就需要一种机制，在goroutine之间传递信号消息。</p>
-<h2 id="简介"><a href="#简介" class="headerlink" title="简介"></a>简介</h2><p>context 中文翻译过来叫”上下文“，常被用来 goroutine 之间传递信息和信号的。信息和信号包括截至时间（deadline)，取消信号(cancellation signals) 以及跨边界需要往下传递的键值对信息。</p>
-<h2 id="特性"><a href="#特性" class="headerlink" title="特性"></a>特性</h2><ul>
-<li>context的设计是可通过已有Context进行树型派生，已管理一组过程的生命周期。单Context是不可变的，但可以通过WithValue、WithCancel、WithTimeout方法进行派生并附加一些属性（键值、可取消、时限），以构建一组树型组织的context。</li>
-<li>当根 Context 结束时，所有由其派生出的 Context 也会被一并取消。也就是说，父 Context 的生命周期涵盖所有子 Context 的生命周期。</li>
-</ul>
-<h2 id="使用"><a href="#使用" class="headerlink" title="使用"></a>使用</h2><h3 id="创建根Context"><a href="#创建根Context" class="headerlink" title="创建根Context"></a>创建根Context</h3><p><code>context.Background() </code>创建一个空的Context（not nil), 常用作初始化创建根Context。</p>
-<h3 id="派生携带键值信息Context"><a href="#派生携带键值信息Context" class="headerlink" title="派生携带键值信息Context"></a>派生携带键值信息Context</h3><p><code>context.WithValue(parentContext, key, value)</code> 在父节点Context的基础上创建一个新的携带键值信息的的子节点Context。</p>
-<h3 id="派生可取消Context"><a href="#派生可取消Context" class="headerlink" title="派生可取消Context"></a>派生可取消Context</h3><p><code>context.WithCancel(parentContext) </code>在父节点Context的基础上创建一个新的可取消的子节点Context，返回新创建的子节点Context和取消方法cancelFunc。</p>
-<h3 id="派生有时间限制Context"><a href="#派生有时间限制Context" class="headerlink" title="派生有时间限制Context"></a>派生有时间限制Context</h3><p><code>context.WithTimeout(parentContext，timeout)</code>在父节点Context的基础上创建新的有时间限制的子节点Context，返回新创建子节点Context和取消方法cancelFunc。超过时间限制后，该Conext会发送信号到Done通道，所有子节点检测到信号立即退出。</p>
-<h3 id="派生有截至时间Context"><a href="#派生有截至时间Context" class="headerlink" title="派生有截至时间Context"></a>派生有截至时间Context</h3><p><code>context.WithDeadline(parentContext, time)</code>在父节点Context的基础上创建新的有截至时间的子节点Context,返回新创建子节点Context和取消方法cancelFunc。<code>context.Timeout(parentContext，timeout)</code>等价于<code>context.Deadline(parentContext,time.Now().Add(timeout))</code>。</p>
-<p>​    </p>
-<h2 id="注意"><a href="#注意" class="headerlink" title="注意"></a>注意</h2><ul>
-<li>Background 创建的根节点没有时限，也不能取消。</li>
-<li>WithCancel、WithTimeout、WithDeadline方法是从父context派生出新的context，新的context受限与父context的生命周期。新context应注意在对应过程结束后及时cancel，以防止goroutine泄露。</li>
-<li>不能使用nil Context，尽管语法上允许。不知道使用什么值合适时，可以使用 <code>context.TODO()</code>。</li>
-</ul>
-]]></content>
-      <categories>
-        <category>Golang</category>
-      </categories>
-      <tags>
-        <tag>Golang</tag>
-        <tag>context</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>Golang性能优化篇</title>
     <url>/2022/02/11/Golang%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%AF%87/</url>
     <content><![CDATA[<blockquote>
@@ -85,142 +51,37 @@
       </tags>
   </entry>
   <entry>
-    <title>RPC序列（三）-gRPC安全认证</title>
-    <url>/2021/07/15/RPC%E5%BA%8F%E5%88%97%EF%BC%88%E4%B8%89%EF%BC%89-gRPC%E5%AE%89%E5%85%A8%E8%AE%A4%E8%AF%81/</url>
+    <title>Golang系列（一）-context使用</title>
+    <url>/2021/07/12/Golang%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-context/</url>
     <content><![CDATA[<blockquote>
-<p>未认证的RPC服务可能导致服务被攻击、注入恶意数据、数据泄露等安全问题。gRPC框架自带的两种安全认证方式，这里简单介绍这两种认证方式，并用Golang进行简单实现。</p>
+<p>go的context包详解，context中文翻译过来叫“上下文”，本篇文章讲一下它具体的作用是什么。你在什么情况下可以用到它。</p>
 </blockquote>
 <a id="more"></a>
 
-<h2 id="认证"><a href="#认证" class="headerlink" title="认证"></a>认证</h2><p>gRPC内置两种认证方式：</p>
-<ul>
-<li>SSL/TLS认证方式</li>
-<li>自定义认证方式</li>
+<h2 id="引言"><a href="#引言" class="headerlink" title="引言"></a>引言</h2><p>http server 常为每个请求创建一个 goroutine 以并发地处理请求，同时这个 goroutine 又会创建更多的 gotoutine 来访问数据库和缓存或RPC服务，当请求结束或被终止，能释放所有 gotoutine的资源。因此就需要一种机制，在goroutine之间传递信号消息。</p>
+<h2 id="简介"><a href="#简介" class="headerlink" title="简介"></a>简介</h2><p>context 中文翻译过来叫”上下文“，常被用来 goroutine 之间传递信息和信号的。信息和信号包括截至时间（deadline)，取消信号(cancellation signals) 以及跨边界需要往下传递的键值对信息。</p>
+<h2 id="特性"><a href="#特性" class="headerlink" title="特性"></a>特性</h2><ul>
+<li>context的设计是可通过已有Context进行树型派生，已管理一组过程的生命周期。单Context是不可变的，但可以通过WithValue、WithCancel、WithTimeout方法进行派生并附加一些属性（键值、可取消、时限），以构建一组树型组织的context。</li>
+<li>当根 Context 结束时，所有由其派生出的 Context 也会被一并取消。也就是说，父 Context 的生命周期涵盖所有子 Context 的生命周期。</li>
 </ul>
-<h3 id="SSL-TLS认证"><a href="#SSL-TLS认证" class="headerlink" title="SSL/TLS认证"></a>SSL/TLS认证</h3><p>什么是SSL/TLS呢？SSL是安全套接字层(secure sockets layer),TLS是传输层安全 (transport layer security)，就是在应用层和TCP层之间新加一层加密，这样可以保证信息传输的安全性。</p>
-<h4 id="制作TLS证书"><a href="#制作TLS证书" class="headerlink" title="制作TLS证书"></a>制作TLS证书</h4><p>通过OpenSSL工具生成私钥，加密方式RSA，密码大小2048位。</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">$ openssl genrsa -out server.key 2048</span><br></pre></td></tr></table></figure>
-
-<p>使用私钥生成自签名的证书文件</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">openssl req -new -x509 -sha256 -key server.key -out server.pem -days 3650</span><br></pre></td></tr></table></figure>
-
-<p>填入证书自定义信息，注意<code>server name </code>填写的内容，后面会用到。</p>
-<h4 id="示例项目"><a href="#示例项目" class="headerlink" title="示例项目"></a>示例项目</h4><h5 id="First-server添加TLS认证"><a href="#First-server添加TLS认证" class="headerlink" title="First: server添加TLS认证"></a>First: server添加TLS认证</h5><p>通过密钥和刚刚制作的证书生成服务端传输证书。部分代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// TLS认证</span></span><br><span class="line">creds, err := credentials.NewServerTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;./keys/server.key&quot;</span> <span class="comment">/*制作证书存放路径*/</span>)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line">server := grpc.NewServer(grpc.Creds(creds))</span><br></pre></td></tr></table></figure>
-
-<h5 id="Second-client添加TLS认证"><a href="#Second-client添加TLS认证" class="headerlink" title="Second: client添加TLS认证"></a>Second: client添加TLS认证</h5><p>通过制作的证书生成客户端传输证书。部分代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// TLS认证</span></span><br><span class="line">creds, err := credentials.NewClientTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;server name&quot;</span> <span class="comment">/*制作证书时的server name*/</span>)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line">conn, err := grpc.Dial(<span class="string">&quot;localhost:9000&quot;</span>, grpc.WithTransportCredentials(creds))</span><br></pre></td></tr></table></figure>
-
-<p>到这里gRPC的TLS单向认证的简单实现就完成了。</p>
-<h3 id="自定义Token认证"><a href="#自定义Token认证" class="headerlink" title="自定义Token认证"></a>自定义Token认证</h3><p>通过自定义的身份认证方式进行认证客户端是否有权限。简单理解就是处理请求前对请求的内容进行身份认证。</p>
-<h4 id="示例项目-1"><a href="#示例项目-1" class="headerlink" title="示例项目"></a>示例项目</h4><h5 id="First-server添加鉴权拦截器"><a href="#First-server添加鉴权拦截器" class="headerlink" title="First: server添加鉴权拦截器"></a>First: server添加鉴权拦截器</h5><p>新增鉴权拦截器，示例代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Interceptor</span><span class="params">(ctx context.Context, req <span class="keyword">interface</span>&#123;&#125;, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">	err := Auth(ctx)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 继续处理请求</span></span><br><span class="line">	<span class="keyword">return</span> handler(ctx, req)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Auth</span><span class="params">(ctx context.Context)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	md, ok := metadata.FromIncomingContext(ctx)</span><br><span class="line">	<span class="keyword">if</span> !ok &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;无Token认证信息&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// authentication</span></span><br><span class="line">	val := md.Get(<span class="string">&quot;app_id&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(val) &lt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;app_id is empty&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	appID := val[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">	val = md.Get(<span class="string">&quot;secret_key&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(val) &lt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;secret_key is empty&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	appKey := val[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 简单模拟鉴权方式</span></span><br><span class="line">	<span class="keyword">if</span> _, ok := tokenMap[appID]; !ok || appKey != tokenMap[appID] &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;unauthorized&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>将鉴权拦截器加入服务选项，代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// token auth</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.UnaryInterceptor(interceptor.Interceptor))</span><br><span class="line"></span><br><span class="line"><span class="comment">// rpc server</span></span><br><span class="line">server := grpc.NewServer(opts...)</span><br></pre></td></tr></table></figure>
-
-
-
-<h5 id="second-client添加身份认证请求参数"><a href="#second-client添加身份认证请求参数" class="headerlink" title="second: client添加身份认证请求参数"></a>second: client添加身份认证请求参数</h5><h6 id="方式一：实现PerRPCCredentials接口"><a href="#方式一：实现PerRPCCredentials接口" class="headerlink" title="方式一：实现PerRPCCredentials接口"></a>方式一：实现PerRPCCredentials接口</h6><p>该接口有两个方法</p>
-<ol>
-<li><code>GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) </code> 返回请求的身份认证数据。</li>
-<li><code>RequireTransportSecurity() bool </code>返回是否开启TLS认证</li>
-</ol>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">type</span> authCredential <span class="keyword">struct</span>&#123;&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(*authCredential)</span> <span class="title">GetRequestMetadata</span><span class="params">(ctx context.Context, uri ...<span class="keyword">string</span>)</span> <span class="params">(<span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>, error)</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>&#123;<span class="string">&quot;app_id&quot;</span>:<span class="string">&quot;123456&quot;</span>,<span class="string">&quot;secret_key&quot;</span>:<span class="string">&quot;key&quot;</span>&#125;, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(*authCredential)</span> 	<span class="title">RequireTransportSecurity</span><span class="params">()</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>然后将该自定义认证加入到客户端选项中：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 自定义认证方式</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.WithPerRPCCredentials(<span class="built_in">new</span>(authCredential)))</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-
-
-
-<h6 id="方式二：context添加元数据"><a href="#方式二：context添加元数据" class="headerlink" title="方式二：context添加元数据"></a>方式二：context添加元数据</h6><p>请求方法的context添加身份认证元数据。</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 认证参数</span></span><br><span class="line">md := metadata.Pairs(<span class="string">&quot;app_id&quot;</span>, <span class="string">&quot;123456&quot;</span>, <span class="string">&quot;secret_key&quot;</span>, <span class="string">&quot;secret_key&quot;</span>)</span><br><span class="line">ctx := metadata.NewOutgoingContext(context.Background(), md)</span><br><span class="line"></span><br><span class="line"><span class="comment">// todo </span></span><br><span class="line"><span class="comment">// resp := client.Function(ctx, reqMsg...)</span></span><br></pre></td></tr></table></figure>
-
-<p>到这自定义身份认证的简单实现就完成了。</p>
-<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
-
-
-
-
-
+<h2 id="使用"><a href="#使用" class="headerlink" title="使用"></a>使用</h2><h3 id="创建根Context"><a href="#创建根Context" class="headerlink" title="创建根Context"></a>创建根Context</h3><p><code>context.Background() </code>创建一个空的Context（not nil), 常用作初始化创建根Context。</p>
+<h3 id="派生携带键值信息Context"><a href="#派生携带键值信息Context" class="headerlink" title="派生携带键值信息Context"></a>派生携带键值信息Context</h3><p><code>context.WithValue(parentContext, key, value)</code> 在父节点Context的基础上创建一个新的携带键值信息的的子节点Context。</p>
+<h3 id="派生可取消Context"><a href="#派生可取消Context" class="headerlink" title="派生可取消Context"></a>派生可取消Context</h3><p><code>context.WithCancel(parentContext) </code>在父节点Context的基础上创建一个新的可取消的子节点Context，返回新创建的子节点Context和取消方法cancelFunc。</p>
+<h3 id="派生有时间限制Context"><a href="#派生有时间限制Context" class="headerlink" title="派生有时间限制Context"></a>派生有时间限制Context</h3><p><code>context.WithTimeout(parentContext，timeout)</code>在父节点Context的基础上创建新的有时间限制的子节点Context，返回新创建子节点Context和取消方法cancelFunc。超过时间限制后，该Conext会发送信号到Done通道，所有子节点检测到信号立即退出。</p>
+<h3 id="派生有截至时间Context"><a href="#派生有截至时间Context" class="headerlink" title="派生有截至时间Context"></a>派生有截至时间Context</h3><p><code>context.WithDeadline(parentContext, time)</code>在父节点Context的基础上创建新的有截至时间的子节点Context,返回新创建子节点Context和取消方法cancelFunc。<code>context.Timeout(parentContext，timeout)</code>等价于<code>context.Deadline(parentContext,time.Now().Add(timeout))</code>。</p>
+<p>​    </p>
+<h2 id="注意"><a href="#注意" class="headerlink" title="注意"></a>注意</h2><ul>
+<li>Background 创建的根节点没有时限，也不能取消。</li>
+<li>WithCancel、WithTimeout、WithDeadline方法是从父context派生出新的context，新的context受限与父context的生命周期。新context应注意在对应过程结束后及时cancel，以防止goroutine泄露。</li>
+<li>不能使用nil Context，尽管语法上允许。不知道使用什么值合适时，可以使用 <code>context.TODO()</code>。</li>
+</ul>
 ]]></content>
       <categories>
-        <category>gRPC</category>
+        <category>Golang</category>
       </categories>
       <tags>
-        <tag>gRPC</tag>
-        <tag>RPC</tag>
-        <tag>SSL/TLS</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Go每周一库之Logrus</title>
-    <url>/2022/06/08/Go%E6%AF%8F%E5%91%A8%E4%B8%80%E5%BA%93%E4%B9%8BLogrus/</url>
-    <content><![CDATA[<blockquote>
-<p>golang开发者常用的日志三方库<a href="https://github.com/sirupsen/logrus">Logrus</a>；具备兼容性、扩展性等多种优点；本篇博客结合源码来分析它的设计思路和更高级的使用方法；</p>
-</blockquote>
-<a id="more"></a>
-
-
-
-<h2 id="基础介绍"><a href="#基础介绍" class="headerlink" title="基础介绍"></a>基础介绍</h2><p>官方给到的介绍 <a href="https://github.com/sirupsen/logrus">Logrus</a> 是 Go (golang) 的结构化记录器，与标准库记录器完全 API 兼容。</p>
-<p>包含三大组成部分：日志等级、打印信息、输出样式；</p>
-<h2 id="日志等级"><a href="#日志等级" class="headerlink" title="日志等级"></a>日志等级</h2><p>日志等级从低到高（<strong>Panic</strong>、、<strong>Error</strong>、<strong>Warn</strong>、<strong>Info</strong>、<strong>Debug</strong>、<strong>Trace</strong>）</p>
-<p>在<code>exported.go</code>中实现了一个标准logger对象<code>std</code>；其默认的日志记录等级是<code>Info</code>，只有当打印等级低于日志记录等级才会进行输出（祥见<code>export.go</code>中<code>IsLevelEnabled</code>方法)；</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">var</span> (</span><br><span class="line">	<span class="comment">// std is the name of the standard logger in stdlib `log`</span></span><br><span class="line">	std = New()</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
-
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// It&#x27;s recommended to make this a global instance called `log`.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">New</span><span class="params">()</span> *<span class="title">Logger</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> &amp;Logger&#123;</span><br><span class="line">		Out:          os.Stderr,</span><br><span class="line">		Formatter:    <span class="built_in">new</span>(TextFormatter),</span><br><span class="line">		Hooks:        <span class="built_in">make</span>(LevelHooks),</span><br><span class="line">		Level:        InfoLevel,</span><br><span class="line">		ExitFunc:     os.Exit,</span><br><span class="line">		ReportCaller: <span class="literal">false</span>,</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// IsLevelEnabled checks if the log level of the logger is greater than the level param</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(logger *Logger)</span> <span class="title">IsLevelEnabled</span><span class="params">(level Level)</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> logger.level() &gt;= level</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h2 id="Entry和Logger两者的关系"><a href="#Entry和Logger两者的关系" class="headerlink" title="Entry和Logger两者的关系"></a>Entry和Logger两者的关系</h2><p><strong>Entry</strong>和<strong>Logger</strong>是整个<strong>Logrus</strong>库中最重要的两个数据结构；了解了这两者的关系你就能更清楚的知道<strong>Logrus</strong>的整个设计思路；</p>
-<ul>
-<li><strong>Logger</strong>是一个全局日志工具，所有记录日志的上层操作接口是由Logger提供，Entry属于单条日志记录的实体，Logger每打印一条日志，都对应创建一个Entry对象，并最后交由它处理；</li>
-<li><strong>Entry</strong>是每条日志记录的实体，每记录一条日志，都会创建一个Entry对象，里面包含具体日志记录的数据字段和方法集；</li>
-</ul>
-<h2 id="exported中常用方法"><a href="#exported中常用方法" class="headerlink" title="exported中常用方法"></a>exported中常用方法</h2><p><code>exported.go</code>中实现了一个标准的logger对象，并提供基础方法；</p>
-<h3 id="SetReportCaller"><a href="#SetReportCaller" class="headerlink" title="SetReportCaller"></a>SetReportCaller</h3><p><code>SetReportCaller(true)</code>方法其功能就是输出日志中添加文件名和方法信息；logger对象中有<code>ReportCaller</code>字段，用于是否记录调用者信息的标志，默认为false；Entry对象会根据这个标志创建Caller，Caller是<code>runtime.Frame</code>类型，可以检索第一个非 Logrus 调用函数的名称和包名；</p>
-<h3 id="SetOutput"><a href="#SetOutput" class="headerlink" title="SetOutput"></a>SetOutput</h3><p><code>SetOutput()</code>方法可重定向日志输出到文件等;</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// SetOutput sets the standard logger output.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">SetOutput</span><span class="params">(out io.Writer)</span></span> &#123;</span><br><span class="line">	std.SetOutput(out)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="SetFormatter"><a href="#SetFormatter" class="headerlink" title="SetFormatter"></a>SetFormatter</h3><p><code>SetFormatter()</code>可通过实现<code>Formatter</code>接口重新定义日志输出格式；Logrus已经实现了<code>JSONFormatter</code>和<code>TextFormatter</code>两种输出样式；也可以自己实现接口自定义输出样式；</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">type</span> Formatter <span class="keyword">interface</span> &#123;</span><br><span class="line">   Format(*Entry) ([]<span class="keyword">byte</span>, error)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// SetFormatter sets the standard logger formatter.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">SetFormatter</span><span class="params">(formatter Formatter)</span></span> &#123;</span><br><span class="line">	std.SetFormatter(formatter)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="AddHook"><a href="#AddHook" class="headerlink" title="AddHook"></a>AddHook</h3><p>Logrus可以通过添加钩子的方式来实现每条日志输出前都会执行钩子的特定方法；</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// AddHook adds a hook to the standard logger hooks.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">AddHook</span><span class="params">(hook Hook)</span></span> &#123;</span><br><span class="line">	std.AddHook(hook)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>通过实现Hook接口创建钩子，添加钩子对象会在entry的log方法中执行钩子方法fire()；从注释可以知道钩子方法的执行和日志等级应该，同时钩子方法并不会开辟goroutine进行执行;</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">//A hook to be fired when logging on the logging levels returned from</span></span><br><span class="line"><span class="comment">//`Levels()` on your implementation of the interface. Note that this is //not fired in a goroutine or a channel with workers, you should handle //such functionality yourself if your call is non-blocking and you //don&#x27;t wish for the logging calls for levels returned from `Levels()` //to block.</span></span><br><span class="line"><span class="keyword">type</span> Hook <span class="keyword">interface</span> &#123;</span><br><span class="line">	Levels() []Level</span><br><span class="line">	Fire(*Entry) error</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h4 id="第三方Hook"><a href="#第三方Hook" class="headerlink" title="第三方Hook"></a>第三方Hook</h4><p>将日志发送到 缓冲或队列 等中间件中：</p>
-<ul>
-<li><p><a href="https://link.zhihu.com/?target=https://github.com/weekface/mgorus">mgorus</a>：将日志发送到 mongodb；</p>
-</li>
-<li><p><a href="https://link.zhihu.com/?target=https://github.com/rogierlommers/logrus-redis-hook">logrus-redis-hook</a>：将日志发送到 redis；</p>
-</li>
-<li><p><a href="https://link.zhihu.com/?target=https://github.com/vladoatanasov/logrus_amqp">logrus-amqp</a>：将日志发送到 ActiveMQ；</p>
-</li>
-<li><p><a href="https://github.com/sirupsen/logrus/wiki/Hooks">wiki</a></p>
-</li>
-</ul>
-<h2 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h2><p>Logger是可以高度定制的，使用Hook钩子机制，Formatter定义日志格式，可以做到多级别输出、格式化输出、多样化输出。你学费了吗？</p>
-]]></content>
-      <categories>
-        <category>golang</category>
-      </categories>
-      <tags>
-        <tag>golang</tag>
-        <tag>logrus</tag>
-        <tag>日志</tag>
-        <tag>三方库</tag>
+        <tag>Golang</tag>
+        <tag>context</tag>
       </tags>
   </entry>
   <entry>
@@ -318,6 +179,99 @@
 ]]></content>
   </entry>
   <entry>
+    <title>RPC序列（三）-gRPC安全认证</title>
+    <url>/2021/07/15/RPC%E5%BA%8F%E5%88%97%EF%BC%88%E4%B8%89%EF%BC%89-gRPC%E5%AE%89%E5%85%A8%E8%AE%A4%E8%AF%81/</url>
+    <content><![CDATA[<blockquote>
+<p>未认证的RPC服务可能导致服务被攻击、注入恶意数据、数据泄露等安全问题。gRPC框架自带的两种安全认证方式，这里简单介绍这两种认证方式，并用Golang进行简单实现。</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="认证"><a href="#认证" class="headerlink" title="认证"></a>认证</h2><p>gRPC内置两种认证方式：</p>
+<ul>
+<li>SSL/TLS认证方式</li>
+<li>自定义认证方式</li>
+</ul>
+<h3 id="SSL-TLS认证"><a href="#SSL-TLS认证" class="headerlink" title="SSL/TLS认证"></a>SSL/TLS认证</h3><p>什么是SSL/TLS呢？SSL是安全套接字层(secure sockets layer),TLS是传输层安全 (transport layer security)，就是在应用层和TCP层之间新加一层加密，这样可以保证信息传输的安全性。</p>
+<h4 id="制作TLS证书"><a href="#制作TLS证书" class="headerlink" title="制作TLS证书"></a>制作TLS证书</h4><p>通过OpenSSL工具生成私钥，加密方式RSA，密码大小2048位。</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">$ openssl genrsa -out server.key 2048</span><br></pre></td></tr></table></figure>
+
+<p>使用私钥生成自签名的证书文件</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">openssl req -new -x509 -sha256 -key server.key -out server.pem -days 3650</span><br></pre></td></tr></table></figure>
+
+<p>填入证书自定义信息，注意<code>server name </code>填写的内容，后面会用到。</p>
+<h4 id="示例项目"><a href="#示例项目" class="headerlink" title="示例项目"></a>示例项目</h4><h5 id="First-server添加TLS认证"><a href="#First-server添加TLS认证" class="headerlink" title="First: server添加TLS认证"></a>First: server添加TLS认证</h5><p>通过密钥和刚刚制作的证书生成服务端传输证书。部分代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// TLS认证</span></span><br><span class="line">creds, err := credentials.NewServerTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;./keys/server.key&quot;</span> <span class="comment">/*制作证书存放路径*/</span>)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line">server := grpc.NewServer(grpc.Creds(creds))</span><br></pre></td></tr></table></figure>
+
+<h5 id="Second-client添加TLS认证"><a href="#Second-client添加TLS认证" class="headerlink" title="Second: client添加TLS认证"></a>Second: client添加TLS认证</h5><p>通过制作的证书生成客户端传输证书。部分代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// TLS认证</span></span><br><span class="line">creds, err := credentials.NewClientTLSFromFile(<span class="string">&quot;./keys/server.pem&quot;</span>, <span class="string">&quot;server name&quot;</span> <span class="comment">/*制作证书时的server name*/</span>)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;failed to generate credentials err:%v\n&quot;</span>, err)</span><br><span class="line">	<span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line">conn, err := grpc.Dial(<span class="string">&quot;localhost:9000&quot;</span>, grpc.WithTransportCredentials(creds))</span><br></pre></td></tr></table></figure>
+
+<p>到这里gRPC的TLS单向认证的简单实现就完成了。</p>
+<h3 id="自定义Token认证"><a href="#自定义Token认证" class="headerlink" title="自定义Token认证"></a>自定义Token认证</h3><p>通过自定义的身份认证方式进行认证客户端是否有权限。简单理解就是处理请求前对请求的内容进行身份认证。</p>
+<h4 id="示例项目-1"><a href="#示例项目-1" class="headerlink" title="示例项目"></a>示例项目</h4><h5 id="First-server添加鉴权拦截器"><a href="#First-server添加鉴权拦截器" class="headerlink" title="First: server添加鉴权拦截器"></a>First: server添加鉴权拦截器</h5><p>新增鉴权拦截器，示例代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Interceptor</span><span class="params">(ctx context.Context, req <span class="keyword">interface</span>&#123;&#125;, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">	err := Auth(ctx)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 继续处理请求</span></span><br><span class="line">	<span class="keyword">return</span> handler(ctx, req)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Auth</span><span class="params">(ctx context.Context)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	md, ok := metadata.FromIncomingContext(ctx)</span><br><span class="line">	<span class="keyword">if</span> !ok &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;无Token认证信息&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// authentication</span></span><br><span class="line">	val := md.Get(<span class="string">&quot;app_id&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(val) &lt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;app_id is empty&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	appID := val[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">	val = md.Get(<span class="string">&quot;secret_key&quot;</span>)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(val) &lt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;secret_key is empty&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	appKey := val[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 简单模拟鉴权方式</span></span><br><span class="line">	<span class="keyword">if</span> _, ok := tokenMap[appID]; !ok || appKey != tokenMap[appID] &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">&quot;unauthorized&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>将鉴权拦截器加入服务选项，代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// token auth</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.UnaryInterceptor(interceptor.Interceptor))</span><br><span class="line"></span><br><span class="line"><span class="comment">// rpc server</span></span><br><span class="line">server := grpc.NewServer(opts...)</span><br></pre></td></tr></table></figure>
+
+
+
+<h5 id="second-client添加身份认证请求参数"><a href="#second-client添加身份认证请求参数" class="headerlink" title="second: client添加身份认证请求参数"></a>second: client添加身份认证请求参数</h5><h6 id="方式一：实现PerRPCCredentials接口"><a href="#方式一：实现PerRPCCredentials接口" class="headerlink" title="方式一：实现PerRPCCredentials接口"></a>方式一：实现PerRPCCredentials接口</h6><p>该接口有两个方法</p>
+<ol>
+<li><code>GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) </code> 返回请求的身份认证数据。</li>
+<li><code>RequireTransportSecurity() bool </code>返回是否开启TLS认证</li>
+</ol>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">type</span> authCredential <span class="keyword">struct</span>&#123;&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(*authCredential)</span> <span class="title">GetRequestMetadata</span><span class="params">(ctx context.Context, uri ...<span class="keyword">string</span>)</span> <span class="params">(<span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>, error)</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span>&#123;<span class="string">&quot;app_id&quot;</span>:<span class="string">&quot;123456&quot;</span>,<span class="string">&quot;secret_key&quot;</span>:<span class="string">&quot;key&quot;</span>&#125;, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(*authCredential)</span> 	<span class="title">RequireTransportSecurity</span><span class="params">()</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>然后将该自定义认证加入到客户端选项中：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 自定义认证方式</span></span><br><span class="line">opts = <span class="built_in">append</span>(opts, grpc.WithPerRPCCredentials(<span class="built_in">new</span>(authCredential)))</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+
+
+<h6 id="方式二：context添加元数据"><a href="#方式二：context添加元数据" class="headerlink" title="方式二：context添加元数据"></a>方式二：context添加元数据</h6><p>请求方法的context添加身份认证元数据。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 认证参数</span></span><br><span class="line">md := metadata.Pairs(<span class="string">&quot;app_id&quot;</span>, <span class="string">&quot;123456&quot;</span>, <span class="string">&quot;secret_key&quot;</span>, <span class="string">&quot;secret_key&quot;</span>)</span><br><span class="line">ctx := metadata.NewOutgoingContext(context.Background(), md)</span><br><span class="line"></span><br><span class="line"><span class="comment">// todo </span></span><br><span class="line"><span class="comment">// resp := client.Function(ctx, reqMsg...)</span></span><br></pre></td></tr></table></figure>
+
+<p>到这自定义身份认证的简单实现就完成了。</p>
+<h3 id="项目源码"><a href="#项目源码" class="headerlink" title="项目源码"></a>项目源码</h3><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">git clone https:&#x2F;&#x2F;github.com&#x2F;zhouxuwen&#x2F;grpcdemo-go.git</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+]]></content>
+      <categories>
+        <category>gRPC</category>
+      </categories>
+      <tags>
+        <tag>gRPC</tag>
+        <tag>RPC</tag>
+        <tag>SSL/TLS</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>RPC系列（一）-RPC与RUST比较</title>
+    <url>/2021/07/06/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-RPC%E4%B8%8ERUST%E6%AF%94%E8%BE%83/</url>
+    <content><![CDATA[<blockquote>
+<p>本篇文章主要介绍RPC是什么，RPC的具体过程，RPC和RUST的比较以及如何选择。</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="RPC是什么"><a href="#RPC是什么" class="headerlink" title="RPC是什么"></a>RPC是什么</h2><p>RPC(Remote Procedure Call)是远程过程调用的简称。主要目的就是一个应用调用另一个应用的方法，调用方通过调用代理方法的形式调用被调用方的实现方法。调用协议常包括通信协议和序列化协议。底层的通信协议可以是HTTP、TCP等，根据不同的RPC框架而定。序列化协议常用ProtoBuf协议。</p>
+<h2 id="RPC具体过程"><a href="#RPC具体过程" class="headerlink" title="RPC具体过程"></a>RPC具体过程</h2><p><img src="/images/rpc%E5%85%B7%E4%BD%93%E6%B5%81%E7%A8%8B.png" alt="rpc具体流程"></p>
+<h2 id="RPC和RUST比较"><a href="#RPC和RUST比较" class="headerlink" title="RPC和RUST比较"></a>RPC和RUST比较</h2><p>RUST是基于HTTP协议的RESTFul API设计风格的通信方式，也常用于应用之间的信息通信。但设计理念和底层原理是完全不同的。</p>
+<p>HTTP+Rustful的优点是可读性好，支持跨语言。在运用之间通信的使用超越RPC。但缺点也很明显，HTTP是第七层协议，报文包含大量头部信息，有用信息占比少，因此效率和速度较低。另外使用HTTP协议调用接口封装封装，常需要封装很多参数以及校验方法。RPC则更好与其互补，但牺牲可读性来通过效率和性能是可取的。具体怎么选，需根据业务来，灵活站位。</p>
+<h2 id="RPC使用场景"><a href="#RPC使用场景" class="headerlink" title="RPC使用场景"></a>RPC使用场景</h2><p>Rustful常用于与第三方系统之间的信息通信，通过对外调用的接口。</p>
+<p>RPC常用于自家系统之间的互相调用，更安全高效。</p>
+]]></content>
+      <categories>
+        <category>RPC</category>
+      </categories>
+      <tags>
+        <tag>RPC</tag>
+        <tag>RUST</tag>
+        <tag>Rustful</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>微服务架构系列（一）-服务注册与发现</title>
     <url>/2022/02/18/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E7%8E%B0/</url>
     <content><![CDATA[<blockquote>
@@ -344,6 +298,76 @@
       <tags>
         <tag>etcd</tag>
         <tag>consul</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Go每周一库之Logrus</title>
+    <url>/2022/06/08/Go%E6%AF%8F%E5%91%A8%E4%B8%80%E5%BA%93%E4%B9%8BLogrus/</url>
+    <content><![CDATA[<blockquote>
+<p>golang开发者常用的日志三方库<a href="https://github.com/sirupsen/logrus">Logrus</a>；具备兼容性、扩展性等多种优点；本篇博客结合源码来分析它的设计思路和更高级的使用方法；</p>
+</blockquote>
+<a id="more"></a>
+
+
+
+<h2 id="基础介绍"><a href="#基础介绍" class="headerlink" title="基础介绍"></a>基础介绍</h2><p>官方给到的介绍 <a href="https://github.com/sirupsen/logrus">Logrus</a> 是 Go (golang) 的结构化记录器，与标准库记录器完全 API 兼容。</p>
+<p>包含三大组成部分：日志等级、打印信息、输出样式；</p>
+<h2 id="日志等级"><a href="#日志等级" class="headerlink" title="日志等级"></a>日志等级</h2><p>日志等级从低到高（<strong>Panic</strong>、、<strong>Error</strong>、<strong>Warn</strong>、<strong>Info</strong>、<strong>Debug</strong>、<strong>Trace</strong>）</p>
+<p>在<code>exported.go</code>中实现了一个标准logger对象<code>std</code>；其默认的日志记录等级是<code>Info</code>，只有当打印等级低于日志记录等级才会进行输出（祥见<code>export.go</code>中<code>IsLevelEnabled</code>方法)；</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">var</span> (</span><br><span class="line">	<span class="comment">// std is the name of the standard logger in stdlib `log`</span></span><br><span class="line">	std = New()</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// It&#x27;s recommended to make this a global instance called `log`.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">New</span><span class="params">()</span> *<span class="title">Logger</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> &amp;Logger&#123;</span><br><span class="line">		Out:          os.Stderr,</span><br><span class="line">		Formatter:    <span class="built_in">new</span>(TextFormatter),</span><br><span class="line">		Hooks:        <span class="built_in">make</span>(LevelHooks),</span><br><span class="line">		Level:        InfoLevel,</span><br><span class="line">		ExitFunc:     os.Exit,</span><br><span class="line">		ReportCaller: <span class="literal">false</span>,</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// IsLevelEnabled checks if the log level of the logger is greater than the level param</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(logger *Logger)</span> <span class="title">IsLevelEnabled</span><span class="params">(level Level)</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> logger.level() &gt;= level</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="Entry和Logger两者的关系"><a href="#Entry和Logger两者的关系" class="headerlink" title="Entry和Logger两者的关系"></a>Entry和Logger两者的关系</h2><p><strong>Entry</strong>和<strong>Logger</strong>是整个<strong>Logrus</strong>库中最重要的两个数据结构；了解了这两者的关系你就能更清楚的知道<strong>Logrus</strong>的整个设计思路；</p>
+<ul>
+<li><strong>Logger</strong>是一个全局日志工具，所有记录日志的上层操作接口是由Logger提供，Entry属于单条日志记录的实体，Logger每打印一条日志，都对应创建一个Entry对象，并最后交由它处理；</li>
+<li><strong>Entry</strong>是每条日志记录的实体，每记录一条日志，都会创建一个Entry对象，里面包含具体日志记录的数据字段和方法集；</li>
+</ul>
+<h2 id="exported中常用方法"><a href="#exported中常用方法" class="headerlink" title="exported中常用方法"></a>exported中常用方法</h2><p><code>exported.go</code>中实现了一个标准的logger对象，并提供基础方法；</p>
+<h3 id="SetReportCaller"><a href="#SetReportCaller" class="headerlink" title="SetReportCaller"></a>SetReportCaller</h3><p><code>SetReportCaller(true)</code>方法其功能就是输出日志中添加文件名和方法信息；logger对象中有<code>ReportCaller</code>字段，用于是否记录调用者信息的标志，默认为false；Entry对象会根据这个标志创建Caller，Caller是<code>runtime.Frame</code>类型，可以检索第一个非 Logrus 调用函数的名称和包名；</p>
+<h3 id="SetOutput"><a href="#SetOutput" class="headerlink" title="SetOutput"></a>SetOutput</h3><p><code>SetOutput()</code>方法可重定向日志输出到文件等;</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// SetOutput sets the standard logger output.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">SetOutput</span><span class="params">(out io.Writer)</span></span> &#123;</span><br><span class="line">	std.SetOutput(out)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="SetFormatter"><a href="#SetFormatter" class="headerlink" title="SetFormatter"></a>SetFormatter</h3><p><code>SetFormatter()</code>可通过实现<code>Formatter</code>接口重新定义日志输出格式；Logrus已经实现了<code>JSONFormatter</code>和<code>TextFormatter</code>两种输出样式；也可以自己实现接口自定义输出样式；</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">type</span> Formatter <span class="keyword">interface</span> &#123;</span><br><span class="line">   Format(*Entry) ([]<span class="keyword">byte</span>, error)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// SetFormatter sets the standard logger formatter.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">SetFormatter</span><span class="params">(formatter Formatter)</span></span> &#123;</span><br><span class="line">	std.SetFormatter(formatter)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="AddHook"><a href="#AddHook" class="headerlink" title="AddHook"></a>AddHook</h3><p>Logrus可以通过添加钩子的方式来实现每条日志输出前都会执行钩子的特定方法；</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// AddHook adds a hook to the standard logger hooks.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">AddHook</span><span class="params">(hook Hook)</span></span> &#123;</span><br><span class="line">	std.AddHook(hook)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>通过实现Hook接口创建钩子，添加钩子对象会在entry的log方法中执行钩子方法fire()；从注释可以知道钩子方法的执行和日志等级应该，同时钩子方法并不会开辟goroutine进行执行;</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">//A hook to be fired when logging on the logging levels returned from</span></span><br><span class="line"><span class="comment">//`Levels()` on your implementation of the interface. Note that this is //not fired in a goroutine or a channel with workers, you should handle //such functionality yourself if your call is non-blocking and you //don&#x27;t wish for the logging calls for levels returned from `Levels()` //to block.</span></span><br><span class="line"><span class="keyword">type</span> Hook <span class="keyword">interface</span> &#123;</span><br><span class="line">	Levels() []Level</span><br><span class="line">	Fire(*Entry) error</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="第三方Hook"><a href="#第三方Hook" class="headerlink" title="第三方Hook"></a>第三方Hook</h4><p>将日志发送到 缓冲或队列 等中间件中：</p>
+<ul>
+<li><p><a href="https://link.zhihu.com/?target=https://github.com/weekface/mgorus">mgorus</a>：将日志发送到 mongodb；</p>
+</li>
+<li><p><a href="https://link.zhihu.com/?target=https://github.com/rogierlommers/logrus-redis-hook">logrus-redis-hook</a>：将日志发送到 redis；</p>
+</li>
+<li><p><a href="https://link.zhihu.com/?target=https://github.com/vladoatanasov/logrus_amqp">logrus-amqp</a>：将日志发送到 ActiveMQ；</p>
+</li>
+<li><p><a href="https://github.com/sirupsen/logrus/wiki/Hooks">wiki</a></p>
+</li>
+</ul>
+<h2 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h2><p>Logger是可以高度定制的，使用Hook钩子机制，Formatter定义日志格式，可以做到多级别输出、格式化输出、多样化输出。你学费了吗？</p>
+]]></content>
+      <categories>
+        <category>golang</category>
+      </categories>
+      <tags>
+        <tag>golang</tag>
+        <tag>logrus</tag>
+        <tag>日志</tag>
+        <tag>三方库</tag>
       </tags>
   </entry>
   <entry>
@@ -413,113 +437,6 @@
       </tags>
   </entry>
   <entry>
-    <title>微服务架构系列（一）-服务注册与发现（2）</title>
-    <url>/2022/03/03/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E7%8E%B0%EF%BC%882%EF%BC%89/</url>
-    <content><![CDATA[<blockquote>
-<p>服务注册与发现之go语言设计与实现，为什么需要租约模式？watch机制解决了什么问题？</p>
-</blockquote>
-<a id="more"></a>
-
-
-
-<h2 id="1-定义接口"><a href="#1-定义接口" class="headerlink" title="1.定义接口"></a>1.定义接口</h2><p>首先确认整个流程需要做的事情；</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">1. 创建注册表对象,建立连接;</span><br><span class="line">2. 服务注册到注册表,定期续租;</span><br><span class="line">3. 服务从注册表中注销;</span><br><span class="line">4. 从注册表中获取服务列表;</span><br><span class="line">5. 监听key,当key变化时更新服务列表;</span><br></pre></td></tr></table></figure>
-
-<p>从这些需要做的事情可以抽象出三个角色注册者（Registrar）、发现者（Discovery）、观察者（Watcher）以及方法。伪代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">type</span> Registrar <span class="keyword">interface</span> &#123;</span><br><span class="line">  Register()</span><br><span class="line">  DeRegister()</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Discovery <span class="keyword">interface</span> &#123; </span><br><span class="line">  Discover() []*Service</span><br><span class="line">  Watch(key <span class="keyword">string</span>) *Watcher</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Watcher <span class="keyword">interface</span> &#123;</span><br><span class="line">  Naxt() []*Service</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h2 id="2-实现接口"><a href="#2-实现接口" class="headerlink" title="2.实现接口"></a>2.实现接口</h2><h3 id="Consul"><a href="#Consul" class="headerlink" title="Consul"></a>Consul</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/consul/v2</span><br></pre></td></tr></table></figure>
-
-<h3 id="Etcd"><a href="#Etcd" class="headerlink" title="Etcd"></a>Etcd</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/etcd/v2</span><br></pre></td></tr></table></figure>
-
-<h3 id="zookeeper"><a href="#zookeeper" class="headerlink" title="zookeeper"></a>zookeeper</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/zookeeper/v2</span><br></pre></td></tr></table></figure>
-
-<h3 id="Nacos"><a href="#Nacos" class="headerlink" title="Nacos"></a>Nacos</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/nacos/v2</span><br></pre></td></tr></table></figure>
-
-<h3 id="kubernetes"><a href="#kubernetes" class="headerlink" title="kubernetes"></a>kubernetes</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/kubernetes/v2</span><br></pre></td></tr></table></figure>
-
-<h3 id="polaris"><a href="#polaris" class="headerlink" title="polaris"></a>polaris</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/polaris/v2</span><br></pre></td></tr></table></figure>
-
-
-
-<h2 id="3-问题"><a href="#3-问题" class="headerlink" title="3.问题"></a>3.问题</h2><h3 id="为什么需要租约模式？定期续租是为了什么？"><a href="#为什么需要租约模式？定期续租是为了什么？" class="headerlink" title="为什么需要租约模式？定期续租是为了什么？"></a>为什么需要租约模式？定期续租是为了什么？</h3><p>服务注册到注册表中，如果服务挂了，不从注册表中移除，它还会在注册表中，请求就可能进入异常服务中，这并不是我们想要的结果。于是便有了租约模式，服务需要定期发送续租请求，在指定时间（keepalive）内未发送请求，就认为服务处于异常状态，将被从注册表中移除。</p>
-<h3 id="watch机制是解决什么问题？"><a href="#watch机制是解决什么问题？" class="headerlink" title="watch机制是解决什么问题？"></a>watch机制是解决什么问题？</h3><p>服务发现是从注册表中发现一组服务列表，服务列表并未更新，我们还是需要主动从注册表中获取服务列表，在我们看来服务列表未更新，这种操作是没必要的，为了避免这种反复轮询，便有了watch机制，从主动变成了被动，我们对key进行监听，如果key的value更新了，便进行通知，我们才去获取服务列表进行更新。</p>
-<h2 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h2><p>虽然服务注册与发现的基础使用是有了，但实际使用下来会有以下两个问题：</p>
-<ol>
-<li><p>服务发现获取到是服务列表，从中选择一个涉及负载均衡算法</p>
-</li>
-<li><p>服务发现获取的是服务连接信息，其中可能是http服务，可能是grpc服务，不能很好的使用；</p>
-</li>
-</ol>
-<p>从这两个问题我们可以抽象几个角色选择器（Selecter）、均衡器（Banlancer）、解析器（Reslover）等。下一篇从这两个问题出发介绍这几个角色的实现。</p>
-]]></content>
-      <categories>
-        <category>微服务架构</category>
-      </categories>
-      <tags>
-        <tag>etcd</tag>
-        <tag>consul</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>RPC系列（一）-RPC与RUST比较</title>
-    <url>/2021/07/06/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-RPC%E4%B8%8ERUST%E6%AF%94%E8%BE%83/</url>
-    <content><![CDATA[<blockquote>
-<p>本篇文章主要介绍RPC是什么，RPC的具体过程，RPC和RUST的比较以及如何选择。</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="RPC是什么"><a href="#RPC是什么" class="headerlink" title="RPC是什么"></a>RPC是什么</h2><p>RPC(Remote Procedure Call)是远程过程调用的简称。主要目的就是一个应用调用另一个应用的方法，调用方通过调用代理方法的形式调用被调用方的实现方法。调用协议常包括通信协议和序列化协议。底层的通信协议可以是HTTP、TCP等，根据不同的RPC框架而定。序列化协议常用ProtoBuf协议。</p>
-<h2 id="RPC具体过程"><a href="#RPC具体过程" class="headerlink" title="RPC具体过程"></a>RPC具体过程</h2><p><img src="/images/rpc%E5%85%B7%E4%BD%93%E6%B5%81%E7%A8%8B.png" alt="rpc具体流程"></p>
-<h2 id="RPC和RUST比较"><a href="#RPC和RUST比较" class="headerlink" title="RPC和RUST比较"></a>RPC和RUST比较</h2><p>RUST是基于HTTP协议的RESTFul API设计风格的通信方式，也常用于应用之间的信息通信。但设计理念和底层原理是完全不同的。</p>
-<p>HTTP+Rustful的优点是可读性好，支持跨语言。在运用之间通信的使用超越RPC。但缺点也很明显，HTTP是第七层协议，报文包含大量头部信息，有用信息占比少，因此效率和速度较低。另外使用HTTP协议调用接口封装封装，常需要封装很多参数以及校验方法。RPC则更好与其互补，但牺牲可读性来通过效率和性能是可取的。具体怎么选，需根据业务来，灵活站位。</p>
-<h2 id="RPC使用场景"><a href="#RPC使用场景" class="headerlink" title="RPC使用场景"></a>RPC使用场景</h2><p>Rustful常用于与第三方系统之间的信息通信，通过对外调用的接口。</p>
-<p>RPC常用于自家系统之间的互相调用，更安全高效。</p>
-]]></content>
-      <categories>
-        <category>RPC</category>
-      </categories>
-      <tags>
-        <tag>RPC</tag>
-        <tag>RUST</tag>
-        <tag>Rustful</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>微服务架构系列（一）-服务注册与发现（3）</title>
-    <url>/2022/03/15/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E7%8E%B0%EF%BC%883%EF%BC%89/</url>
-    <content><![CDATA[<blockquote>
-<p>从上一篇留下的两个问题出发，介绍从服务发现获取的服务注册列表中获取一个服务注册信息并将其实例成可使用的client对象的过程；</p>
-</blockquote>
-<a id="more"></a>
-
-<h2 id="分析"><a href="#分析" class="headerlink" title="分析"></a>分析</h2><p>从服务发现获取的服务注册列表中获取一个服务注册信息并将其实例成可使用的client对象需要经过以下步骤：</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">1、服务发现获取服务列表；对其进行监听，如果服务列表发生变化进行更新；</span><br><span class="line">1、服务列表连接和权重等信息构成节点列表；节点列表中节点再附加命中等信息构成加权节点列表供后续使用；</span><br><span class="line">2、从加权节点列表经过过滤后通过负载均衡算法选择其中一个节点；</span><br></pre></td></tr></table></figure>
-
-<p>从以上步骤抽象出角色和接口：</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">Reslover(解析器): 通过服务名(服务注册时的服务命名)解析成服务对象列表的过程；通过服务发现获取列表，服务监听更新列表；</span><br><span class="line">Selector(选择器): 将服务列表构建成具有权重和命中等信息的家权节点列表，通过均衡器从加权节点列表中选择一个节点的过程；</span><br><span class="line">Balancer(均衡器): 从节点列表中选择这个节点有不同的负载均衡算法；例如：wrr等</span><br></pre></td></tr></table></figure>
-
-<p>接口定义伪代码如下：</p>
-<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">type</span> Selector <span class="keyword">interface</span> &#123;</span><br><span class="line">	Apply([]Node)</span><br><span class="line">	Select() Node</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Balancer <span class="keyword">interface</span> &#123;</span><br><span class="line">	Pick() Node</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> ResloverBuilder <span class="keyword">interface</span> &#123;</span><br><span class="line">	Build(Discovery, Selector, Target) Reslover</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Reslover <span class="keyword">interface</span> &#123;</span><br><span class="line">	Update([]Service)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h2 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h2><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">github.com&#x2F;go-kratos&#x2F;kratos&#x2F;selector</span><br><span class="line">github.com&#x2F;go-kratos&#x2F;kratos&#x2F;transport</span><br></pre></td></tr></table></figure>
-
-<p>其中grpc提供了解析器的reslover.Builder接口和reslover.Reslover接口以及均衡器的balancer.Picker接口和balancer.PickResult接口，实现这些接口并进行注册；</p>
-<h2 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h2><p>这里只是简单介绍从服务发现获取的服务注册列表中获取一个服务注册信息并将其实例成可使用的client对象的过程，将角色和方法进行分解；具体实现还需要自己去看代码，最好再自己也实现一遍。</p>
-]]></content>
-      <categories>
-        <category>微服务架构</category>
-      </categories>
-      <tags>
-        <tag>etcd</tag>
-        <tag>grpc</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>RPC系列（四）-HTTP网关</title>
     <url>/2021/07/17/RPC%E7%B3%BB%E5%88%97%EF%BC%88%E5%9B%9B%EF%BC%89-HTTP%E7%BD%91%E5%85%B3/</url>
     <content><![CDATA[<blockquote>
@@ -579,6 +496,89 @@
         <tag>HTTP</tag>
         <tag>gateway</tag>
         <tag>grpc-gateway</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>微服务架构系列（一）-服务注册与发现（3）</title>
+    <url>/2022/03/15/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E7%8E%B0%EF%BC%883%EF%BC%89/</url>
+    <content><![CDATA[<blockquote>
+<p>从上一篇留下的两个问题出发，介绍从服务发现获取的服务注册列表中获取一个服务注册信息并将其实例成可使用的client对象的过程；</p>
+</blockquote>
+<a id="more"></a>
+
+<h2 id="分析"><a href="#分析" class="headerlink" title="分析"></a>分析</h2><p>从服务发现获取的服务注册列表中获取一个服务注册信息并将其实例成可使用的client对象需要经过以下步骤：</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">1、服务发现获取服务列表；对其进行监听，如果服务列表发生变化进行更新；</span><br><span class="line">1、服务列表连接和权重等信息构成节点列表；节点列表中节点再附加命中等信息构成加权节点列表供后续使用；</span><br><span class="line">2、从加权节点列表经过过滤后通过负载均衡算法选择其中一个节点；</span><br></pre></td></tr></table></figure>
+
+<p>从以上步骤抽象出角色和接口：</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">Reslover(解析器): 通过服务名(服务注册时的服务命名)解析成服务对象列表的过程；通过服务发现获取列表，服务监听更新列表；</span><br><span class="line">Selector(选择器): 将服务列表构建成具有权重和命中等信息的家权节点列表，通过均衡器从加权节点列表中选择一个节点的过程；</span><br><span class="line">Balancer(均衡器): 从节点列表中选择这个节点有不同的负载均衡算法；例如：wrr等</span><br></pre></td></tr></table></figure>
+
+<p>接口定义伪代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">type</span> Selector <span class="keyword">interface</span> &#123;</span><br><span class="line">	Apply([]Node)</span><br><span class="line">	Select() Node</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Balancer <span class="keyword">interface</span> &#123;</span><br><span class="line">	Pick() Node</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> ResloverBuilder <span class="keyword">interface</span> &#123;</span><br><span class="line">	Build(Discovery, Selector, Target) Reslover</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Reslover <span class="keyword">interface</span> &#123;</span><br><span class="line">	Update([]Service)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h2><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">github.com&#x2F;go-kratos&#x2F;kratos&#x2F;selector</span><br><span class="line">github.com&#x2F;go-kratos&#x2F;kratos&#x2F;transport</span><br></pre></td></tr></table></figure>
+
+<p>其中grpc提供了解析器的reslover.Builder接口和reslover.Reslover接口以及均衡器的balancer.Picker接口和balancer.PickResult接口，实现这些接口并进行注册；</p>
+<h2 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h2><p>这里只是简单介绍从服务发现获取的服务注册列表中获取一个服务注册信息并将其实例成可使用的client对象的过程，将角色和方法进行分解；具体实现还需要自己去看代码，最好再自己也实现一遍。</p>
+]]></content>
+      <categories>
+        <category>微服务架构</category>
+      </categories>
+      <tags>
+        <tag>etcd</tag>
+        <tag>grpc</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>微服务架构系列（一）-服务注册与发现（2）</title>
+    <url>/2022/03/03/%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E7%B3%BB%E5%88%97%EF%BC%88%E4%B8%80%EF%BC%89-%E6%9C%8D%E5%8A%A1%E6%B3%A8%E5%86%8C%E4%B8%8E%E5%8F%91%E7%8E%B0%EF%BC%882%EF%BC%89/</url>
+    <content><![CDATA[<blockquote>
+<p>服务注册与发现之go语言设计与实现，为什么需要租约模式？watch机制解决了什么问题？</p>
+</blockquote>
+<a id="more"></a>
+
+
+
+<h2 id="1-定义接口"><a href="#1-定义接口" class="headerlink" title="1.定义接口"></a>1.定义接口</h2><p>首先确认整个流程需要做的事情；</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">1. 创建注册表对象,建立连接;</span><br><span class="line">2. 服务注册到注册表,定期续租;</span><br><span class="line">3. 服务从注册表中注销;</span><br><span class="line">4. 从注册表中获取服务列表;</span><br><span class="line">5. 监听key,当key变化时更新服务列表;</span><br></pre></td></tr></table></figure>
+
+<p>从这些需要做的事情可以抽象出三个角色注册者（Registrar）、发现者（Discovery）、观察者（Watcher）以及方法。伪代码如下：</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="keyword">type</span> Registrar <span class="keyword">interface</span> &#123;</span><br><span class="line">  Register()</span><br><span class="line">  DeRegister()</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Discovery <span class="keyword">interface</span> &#123; </span><br><span class="line">  Discover() []*Service</span><br><span class="line">  Watch(key <span class="keyword">string</span>) *Watcher</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Watcher <span class="keyword">interface</span> &#123;</span><br><span class="line">  Naxt() []*Service</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="2-实现接口"><a href="#2-实现接口" class="headerlink" title="2.实现接口"></a>2.实现接口</h2><h3 id="Consul"><a href="#Consul" class="headerlink" title="Consul"></a>Consul</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/consul/v2</span><br></pre></td></tr></table></figure>
+
+<h3 id="Etcd"><a href="#Etcd" class="headerlink" title="Etcd"></a>Etcd</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/etcd/v2</span><br></pre></td></tr></table></figure>
+
+<h3 id="zookeeper"><a href="#zookeeper" class="headerlink" title="zookeeper"></a>zookeeper</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/zookeeper/v2</span><br></pre></td></tr></table></figure>
+
+<h3 id="Nacos"><a href="#Nacos" class="headerlink" title="Nacos"></a>Nacos</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/nacos/v2</span><br></pre></td></tr></table></figure>
+
+<h3 id="kubernetes"><a href="#kubernetes" class="headerlink" title="kubernetes"></a>kubernetes</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/kubernetes/v2</span><br></pre></td></tr></table></figure>
+
+<h3 id="polaris"><a href="#polaris" class="headerlink" title="polaris"></a>polaris</h3><figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">go get -u github.com/go-kratos/kratos/contrib/registry/polaris/v2</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="3-问题"><a href="#3-问题" class="headerlink" title="3.问题"></a>3.问题</h2><h3 id="为什么需要租约模式？定期续租是为了什么？"><a href="#为什么需要租约模式？定期续租是为了什么？" class="headerlink" title="为什么需要租约模式？定期续租是为了什么？"></a>为什么需要租约模式？定期续租是为了什么？</h3><p>服务注册到注册表中，如果服务挂了，不从注册表中移除，它还会在注册表中，请求就可能进入异常服务中，这并不是我们想要的结果。于是便有了租约模式，服务需要定期发送续租请求，在指定时间（keepalive）内未发送请求，就认为服务处于异常状态，将被从注册表中移除。</p>
+<h3 id="watch机制是解决什么问题？"><a href="#watch机制是解决什么问题？" class="headerlink" title="watch机制是解决什么问题？"></a>watch机制是解决什么问题？</h3><p>服务发现是从注册表中发现一组服务列表，服务列表并未更新，我们还是需要主动从注册表中获取服务列表，在我们看来服务列表未更新，这种操作是没必要的，为了避免这种反复轮询，便有了watch机制，从主动变成了被动，我们对key进行监听，如果key的value更新了，便进行通知，我们才去获取服务列表进行更新。</p>
+<h2 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h2><p>虽然服务注册与发现的基础使用是有了，但实际使用下来会有以下两个问题：</p>
+<ol>
+<li><p>服务发现获取到是服务列表，从中选择一个涉及负载均衡算法</p>
+</li>
+<li><p>服务发现获取的是服务连接信息，其中可能是http服务，可能是grpc服务，不能很好的使用；</p>
+</li>
+</ol>
+<p>从这两个问题我们可以抽象几个角色选择器（Selecter）、均衡器（Banlancer）、解析器（Reslover）等。下一篇从这两个问题出发介绍这几个角色的实现。</p>
+]]></content>
+      <categories>
+        <category>微服务架构</category>
+      </categories>
+      <tags>
+        <tag>etcd</tag>
+        <tag>consul</tag>
       </tags>
   </entry>
 </search>
